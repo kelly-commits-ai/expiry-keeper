@@ -269,7 +269,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <script>
 "use strict";
 /* ============ 常數與預設 ============ */
-const APP_VERSION = "1.2.3";
+const APP_VERSION = "1.2.4";
 const LOCS = ["冷藏","冷凍","常溫"];
 const ITEM_GROUPS = [
   ["生鮮食材", ["葉菜類","根莖瓜果","水果","肉類","海鮮","蛋","豆製品","乳製品","熟食剩菜","麵包烘焙"]],
@@ -1298,11 +1298,12 @@ function renderSettings(v) {
   v.append(h("div", { class: "btn-row", style: "margin-top:10px" }, h("button", { class: "linkbtn", onclick: async () => { s.rules = structuredClone(DEFAULT_RULES); s.subRules = structuredClone(DEFAULT_SUB_RULES); await saveState(); render(); toast("已恢復預設規則"); } }, "恢復預設規則")));
 
   // AI
-  v.append(h("div", { class: "sec-title" }, h("h2", { text: "拍照辨識（選用）" }), h("span", { class: "hint", text: s.ai.key ? "已啟用" : "未啟用" })));
+  const aiHint = h("span", { class: "hint", text: s.ai.key ? "已啟用" : "未啟用" });
+  v.append(h("div", { class: "sec-title" }, h("h2", { text: "拍照辨識（選用）" }), aiHint));
   const key = h("input", { type: "password", id: "set-key", autocomplete: "off", value: s.ai.key, placeholder: "貼上 Gemini API 金鑰" });
   const model = h("select", { id: "set-model" }, h("option", { value: s.ai.model, text: s.ai.model }));
   const aiStatus = h("div", { class: "help" });
-  key.addEventListener("change", async () => { s.ai.key = key.value.trim(); await saveState(); aiStatus.className = "help"; aiStatus.textContent = s.ai.key ? "金鑰已儲存，建議按「測試連線」確認" : "已移除金鑰"; });
+  key.addEventListener("change", async () => { s.ai.key = key.value.trim(); await saveState(); aiHint.textContent = s.ai.key ? "已啟用" : "未啟用"; aiStatus.className = "help"; aiStatus.textContent = s.ai.key ? "金鑰已儲存，建議按「測試連線」確認" : "已移除金鑰"; });
   model.addEventListener("change", async () => { s.ai.model = model.value; await saveState(); toast("已切換模型"); });
   const test = h("button", { class: "btn ghost sm", onclick: async () => {
     if (!s.ai.key) return toast("請先貼上金鑰");
