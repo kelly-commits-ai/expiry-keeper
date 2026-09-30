@@ -1,7 +1,7 @@
 {
   "name": "效期管家",
   "short_name": "效期管家",
-  "description": "記錄食材、物品與訂閱會員的到期日，並加入行事曆提醒。",
+  "description": "記錄食材、物品與訂閱項目的到期日，並加入行事曆提醒。",
   "lang": "zh-Hant-TW",
   "start_url": "./",
   "scope": "./",
