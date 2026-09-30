@@ -1,0 +1,1199 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>效期管家</title>
+<meta name="theme-color" content="#0D3B3E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="效期管家">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<!--STYLE-START-->
+<style>
+/* Layout: 單欄手機 App — 頂部膠囊標籤＋大標題＋分隔線，總覽卡片，底部分頁列 */
+:root{
+  --bg:#FAF8F3; --surface:#FFFFFF; --surface-2:#F3F1EA; --ink:#22403F; --ink-2:#5E7472;
+  --primary:#0D3B3E; --accent:#2E7D7D; --btn:#0D3B3E; --on-btn:#FFFFFF;
+  --gold:#C9A961; --gold-deep:#8A6D28; --line:#DCE4E3; --line-strong:#C5D2D0;
+  --danger:#A8412F; --danger-bg:#F8EBE7; --warn:#8F6410; --warn-bg:#F6EFDC;
+  --ok:#2E6F57; --ok-bg:#E7F1EC; --info-bg:#E8F0EF; --backdrop:rgba(13,30,30,.42);
+  --font:"PingFang TC","Noto Sans TC","Heiti TC","Microsoft JhengHei",system-ui,sans-serif;
+  --r:14px; --r-sm:10px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F1817; --surface:#162221; --surface-2:#1C2B2A; --ink:#DDE8E6; --ink-2:#97ABA9;
+  --primary:#9FD3CE; --accent:#6FB8B2; --btn:#2E7D7D; --on-btn:#FFFFFF;
+  --gold:#C9A961; --gold-deep:#D8BD7E; --line:#2A3B3A; --line-strong:#3A4E4C;
+  --danger:#E69482; --danger-bg:#3A2420; --warn:#E2B865; --warn-bg:#33291A;
+  --ok:#86C9A8; --ok-bg:#1B3128; --info-bg:#1D2F2E; --backdrop:rgba(0,0,0,.6);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0F1817; --surface:#162221; --surface-2:#1C2B2A; --ink:#DDE8E6; --ink-2:#97ABA9;
+  --primary:#9FD3CE; --accent:#6FB8B2; --btn:#2E7D7D; --on-btn:#FFFFFF;
+  --gold:#C9A961; --gold-deep:#D8BD7E; --line:#2A3B3A; --line-strong:#3A4E4C;
+  --danger:#E69482; --danger-bg:#3A2420; --warn:#E2B865; --warn-bg:#33291A;
+  --ok:#86C9A8; --ok-bg:#1B3128; --info-bg:#1D2F2E; --backdrop:rgba(0,0,0,.6);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:18px;line-height:1.55;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+
+.wrap{max-width:680px;margin:0 auto;padding-inline:16px;padding-block:16px calc(96px + env(safe-area-inset-bottom,0px))}
+
+/* Header */
+.head{display:grid;gap:6px;padding-top:calc(4px + env(safe-area-inset-top,0px))}
+.capsule{justify-self:start;display:inline-flex;align-items:center;gap:6px;font-size:14px;letter-spacing:.12em;color:var(--gold-deep);border:1px solid var(--gold);border-radius:999px;padding:3px 12px}
+.head h1{margin:2px 0 0;font-size:30px;font-weight:700;letter-spacing:.04em;color:var(--primary);text-wrap:balance}
+.head .sub{color:var(--ink-2);font-size:16px}
+.rule{position:relative;height:1px;background:var(--line);margin:12px 0 16px}
+.rule::before{content:"";position:absolute;left:0;top:0;width:44px;height:1px;background:var(--gold)}
+
+/* Section titles */
+.sec-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:22px 0 10px}
+.sec-title h2{margin:0;font-size:19px;font-weight:700;color:var(--primary);letter-spacing:.03em}
+.sec-title .hint{font-size:15px;color:var(--ink-2)}
+
+/* Summary */
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 10px;display:grid;gap:2px;text-align:left;min-width:0}
+.stat .k{font-size:14.5px;color:var(--ink-2);white-space:nowrap}
+.stat .v{font-size:28px;font-weight:700;line-height:1.15}
+.stat.expired .v{color:var(--danger)} .stat.soon .v{color:var(--warn)} .stat.week .v{color:var(--accent)} .stat.all .v{color:var(--primary)}
+.stat[aria-pressed="true"]{border-color:var(--primary);box-shadow:inset 0 0 0 1px var(--primary)}
+@media (max-width:380px){.summary{grid-template-columns:repeat(2,1fr)}}
+
+/* Toolbar */
+.toolbar{display:grid;gap:10px;margin-top:14px}
+.search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:0 12px;height:44px}
+.search svg{flex:none;color:var(--ink-2)}
+.search input{border:0;background:transparent;outline:none;flex:1;min-width:0;height:100%;font-size:18px}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 11px;font-size:16px}
+.chip[aria-pressed="true"]{background:var(--btn);border-color:var(--btn);color:var(--on-btn)}
+.subcost{margin-top:10px;background:var(--info-bg);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;font-size:16px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.subcost b{color:var(--primary)}
+
+/* Groups & rows */
+.group{margin-top:18px}
+.group-h{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700;color:var(--ink-2);margin:0 0 8px;letter-spacing:.04em}
+.group-h .dot{width:8px;height:8px;border-radius:50%}
+.group-h .cnt{font-weight:500}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.row{display:grid;grid-template-columns:72px 1fr auto;align-items:center;gap:12px;width:100%;text-align:left;background:transparent;border:0;border-top:1px solid var(--line);padding:12px 14px}
+.row:first-child{border-top:0}
+.row:active{background:var(--surface-2)}
+.days{display:grid;justify-items:center;border-radius:var(--r-sm);padding:6px 4px;line-height:1.1}
+.days b{font-size:22px;font-weight:700}
+.days small{font-size:13px;margin-top:2px}
+.u-expired{background:var(--danger-bg);color:var(--danger)}
+.u-soon{background:var(--warn-bg);color:var(--warn)}
+.u-week{background:var(--info-bg);color:var(--accent)}
+.u-ok{background:var(--ok-bg);color:var(--ok)}
+.u-none{background:var(--surface-2);color:var(--ink-2)}
+.row .main{min-width:0}
+.row .name{font-weight:600;font-size:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .meta{font-size:15px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:4px 8px;margin-top:2px}
+.row .date{font-size:15.5px;color:var(--ink-2);text-align:right;white-space:nowrap}
+.row .date .src{display:block;font-size:13px;margin-top:2px}
+.tag{display:inline-flex;align-items:center;border:1px solid var(--line-strong);border-radius:6px;padding:0 6px;font-size:14px;line-height:18px;color:var(--ink-2)}
+.tag.gold{border-color:var(--gold);color:var(--gold-deep)}
+
+/* Empty */
+.empty{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px 18px;margin-top:18px;display:grid;gap:14px}
+.empty h3{margin:0;font-size:20px;color:var(--primary)}
+.steps{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.steps li{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start;font-size:17px}
+.badge{width:26px;height:26px;border-radius:7px;background:var(--gold-deep);color:#fff;display:grid;place-items:center;font-size:14.5px;font-weight:700}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:44px;padding:0 18px;border-radius:var(--r-sm);border:1px solid var(--btn);background:var(--btn);color:var(--on-btn);font-size:17.5px;font-weight:600}
+.btn.ghost{background:transparent;color:var(--primary);border-color:var(--line-strong)}
+.btn.danger{background:transparent;color:var(--danger);border-color:var(--danger)}
+.btn.danger.armed{background:var(--danger);color:#fff}
+.btn.sm{height:36px;padding:0 12px;font-size:16px}
+.btn.block{width:100%}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.btn-row{display:flex;flex-wrap:wrap;gap:8px}
+.btn-row .btn{flex:1 1 auto}
+.linkbtn{background:none;border:0;color:var(--accent);padding:0;font-size:16px;text-decoration:underline;text-underline-offset:3px}
+
+/* Tab bar */
+.tabbar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);z-index:20}
+.tabbar-in{max-width:680px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);padding:6px 8px}
+.tab{background:none;border:0;display:grid;justify-items:center;gap:2px;padding:6px 0;font-size:14px;color:var(--ink-2)}
+.tab svg{width:24px;height:24px}
+.tab[aria-current="page"]{color:var(--primary);font-weight:700}
+.tab.add .plus{width:44px;height:30px;border-radius:999px;background:var(--btn);color:var(--on-btn);display:grid;place-items:center}
+.tab.add .plus svg{width:20px;height:20px}
+
+/* Sheet */
+.sheet{position:fixed;inset:0;z-index:40;display:flex;align-items:flex-end;justify-content:center;background:var(--backdrop)}
+.panel{background:var(--bg);width:100%;max-width:680px;max-height:94dvh;border-radius:18px 18px 0 0;display:flex;flex-direction:column;overflow:hidden}
+.panel-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px 12px;border-bottom:1px solid var(--line);background:var(--surface)}
+.panel-h h3{margin:0;font-size:20px;color:var(--primary)}
+.panel-b{overflow-y:auto;padding:16px 16px calc(24px + env(safe-area-inset-bottom,0px));display:grid;gap:14px;-webkit-overflow-scrolling:touch}
+.x{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;color:var(--ink-2)}
+@media (min-width:700px){.sheet{align-items:center}.panel{border-radius:18px;max-height:88dvh}}
+
+/* Segmented */
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px;gap:3px}
+.seg button{border:0;background:transparent;border-radius:8px;height:36px;font-size:16.5px;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--primary);font-weight:700;box-shadow:0 0 0 1px var(--line-strong)}
+
+/* Cards & forms */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:grid;gap:12px}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.card-h .t{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--primary)}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:10px 10px}
+.f{display:grid;gap:4px;min-width:0}
+.f.full{grid-column:1/-1}
+.f label{font-size:15px;color:var(--ink-2)}
+.f input,.f select,.f textarea{width:100%;min-width:0;height:44px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);padding:0 12px;font-size:18px}
+.f textarea{height:auto;min-height:120px;padding:10px 12px;resize:vertical}
+.f select{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-2) 50%),linear-gradient(135deg,var(--ink-2) 50%,transparent 50%);background-position:calc(100% - 17px) 19px,calc(100% - 12px) 19px;background-size:5px 5px;background-repeat:no-repeat;padding-right:28px}
+.f .help{font-size:14.5px;color:var(--ink-2)}
+.f .help.ok{color:var(--ok)} .f .help.bad{color:var(--danger)}
+.date-wrap{display:flex;gap:6px}
+.date-wrap input[type=text]{flex:1}
+.pick{position:relative;flex:none;width:44px;height:44px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);display:grid;place-items:center;color:var(--ink-2);overflow:hidden}
+.pick input{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:0;padding:0}
+.switch{display:flex;align-items:center;gap:10px;height:44px}
+.switch input{width:22px;height:22px;accent-color:var(--accent)}
+.note{font-size:15.5px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px}
+.note b{color:var(--ink)}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap}
+.thumbs img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.status{font-size:16px;color:var(--ink-2);display:flex;align-items:center;gap:8px}
+.spin{width:16px;height:16px;border-radius:50%;border:2px solid var(--line-strong);border-top-color:var(--accent);animation:sp 0.9s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+
+/* History */
+.hist-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.hrow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid var(--line)}
+.hrow:first-child{border-top:0}
+.hrow .name{font-weight:600}
+.hrow .meta{font-size:15px;color:var(--ink-2)}
+
+/* Settings table */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-sm)}
+table.rules{width:100%;border-collapse:collapse;font-size:16.5px;min-width:350px;table-layout:auto}
+table.rules th,table.rules td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
+table.rules th{font-size:14.5px;color:var(--ink-2);font-weight:600;background:var(--surface-2)}
+table.rules tr:last-child td{border-bottom:0}
+table.rules tr.grp td{background:var(--surface-2);color:var(--gold-deep);font-size:14.5px;font-weight:700;letter-spacing:.08em;padding:6px 10px}
+table.rules th.rm{color:var(--primary);white-space:nowrap}
+table.rules input{width:100%;min-width:46px;height:36px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);padding:0 2px;font-size:18px;text-align:center}
+table.sub-rules input{width:88px}
+table.sub-rules td:last-child,table.sub-rules th:last-child{text-align:right;padding-right:10px}
+table.rules td:first-child,table.rules th:first-child{white-space:nowrap;padding-left:10px;padding-right:6px}
+table.rules th:not(:first-child){text-align:center}
+input[type=number]{-moz-appearance:textfield;appearance:textfield}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+
+
+/* Toast & banner */
+.toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--primary);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:16.5px;z-index:60;max-width:calc(100% - 32px);text-align:center}
+.banner{background:var(--warn-bg);color:var(--warn);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;font-size:16px;margin-top:12px}
+</style>
+<!--STYLE-END-->
+</head>
+<body>
+<!--BODY-START-->
+<div class="wrap" id="app">
+  <header class="head">
+    <span class="capsule">效期・訂閱管理</span>
+    <h1 id="page-title">效期管家</h1>
+    <div class="sub num" id="page-sub"></div>
+  </header>
+  <div class="rule" aria-hidden="true"></div>
+  <div id="banner-slot"></div>
+  <main id="view"></main>
+</div>
+
+<nav class="tabbar" aria-label="主要分頁">
+  <div class="tabbar-in">
+    <button class="tab" data-tab="overview" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>
+      總覽
+    </button>
+    <button class="tab add" data-tab="add">
+      <span class="plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+      新增
+    </button>
+    <button class="tab" data-tab="history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M6 7v11.5A1.5 1.5 0 0 0 7.5 20h9a1.5 1.5 0 0 0 1.5-1.5V7M9 4h6M10 11h4"/></svg>
+      紀錄
+    </button>
+    <button class="tab" data-tab="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      設定
+    </button>
+  </div>
+</nav>
+
+<div id="sheet-root"></div>
+<div id="toast-root" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* ============ 常數與預設 ============ */
+const APP_VERSION = "1.1.1";
+const LOCS = ["冷藏","冷凍","常溫"];
+const ITEM_GROUPS = [
+  ["生鮮食材", ["葉菜類","根莖瓜果","水果","肉類","海鮮","蛋","豆製品","乳製品","熟食剩菜","麵包烘焙"]],
+  ["包裝與乾貨", ["冷凍食品","包裝食品","乾貨穀物","調味料","飲料"]],
+  ["藥品與保健", ["藥品","保健食品"]],
+  ["日用品", ["保養化妝品","個人清潔用品","居家清潔用品","其他日用品"]],
+  ["其他", ["其他"]]
+];
+const ITEM_CATS = ITEM_GROUPS.flatMap(g => g[1]);
+const SUB_CATS = ["軟體／App","影音串流","雲端服務","會員卡","其他訂閱"];
+const CYCLES = ["月繳","年繳","一次性"];
+const SOURCES = ["標示日期","規則推算","週期推算","手動輸入"];
+// [類別, 冷藏天數, 冷凍天數, 常溫天數, 提前提醒天數]；0＝不適合此存放方式，需依包裝填寫
+const RULES_VERSION = 2;
+const DEFAULT_RULES = [
+  ["葉菜類",5,30,1,1],["根莖瓜果",14,90,14,2],["水果",7,180,3,1],["肉類",2,120,0,1],["海鮮",1,90,0,1],
+  ["蛋",21,0,7,3],["豆製品",3,30,0,1],["乳製品",7,30,0,2],["熟食剩菜",3,30,0,1],["麵包烘焙",5,30,3,1],
+  ["冷凍食品",2,180,0,14],["包裝食品",30,0,180,14],["乾貨穀物",180,365,365,30],["調味料",180,0,365,30],["飲料",30,0,180,14],
+  ["藥品",730,0,730,90],["保健食品",730,0,730,60],
+  ["保養化妝品",730,0,730,60],["個人清潔用品",1095,0,1095,30],["居家清潔用品",1095,0,1095,30],["其他日用品",1095,0,1095,30],
+  ["其他",7,30,7,3]
+].map(([cat,fridge,freezer,room,remind])=>({cat,fridge,freezer,room,remind}));
+const DEFAULT_SUB_RULES = [["軟體／App",7],["影音串流",3],["雲端服務",14],["會員卡",30],["其他訂閱",7]].map(([cat,remind])=>({cat,remind}));
+const LEGACY_CATS = { "保健藥品": "藥品", "日用品": "其他日用品" };
+const DEFAULT_SETTINGS = {
+  alarmHour: 9, rulesVersion: RULES_VERSION,
+  rules: DEFAULT_RULES, subRules: DEFAULT_SUB_RULES,
+  ai: { key: "", model: "gemini-flash-latest" }
+};
+const STATUS_LABEL = { used:"已用完", discarded:"已丟棄", cancelled:"已取消" };
+
+/* ============ 狀態 ============ */
+let state = { version: 1, items: [], settings: structuredClone(DEFAULT_SETTINGS) };
+let ui = { tab: "overview", loc: "全部", urgency: null, q: "" };
+let storageMode = "idb"; // idb | local | memory
+
+/* ============ 小工具 ============ */
+const $ = (s, r = document) => r.querySelector(s);
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  if (props) for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "text") el.textContent = v;
+    else if (k === "svg") el.innerHTML = v; // 僅用於本檔內建的靜態圖示
+    else if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2), v);
+    else if (k === "value") el.value = v;
+    else if (k === "checked") el.checked = !!v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()) {
+    if (c == null || c === false) continue;
+    el.append(c.nodeType ? c : document.createTextNode(String(c)));
+  }
+  return el;
+}
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+let fieldSeq = 0; const fid = (p) => p + "-" + (++fieldSeq);
+
+function pad(n) { return String(n).padStart(2, "0"); }
+function fmt(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+function parseISO(s) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); }
+function isISO(s) { return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && fmt(parseISO(s)) === s; }
+function today() { return fmt(new Date()); }
+function addDays(s, n) { const d = parseISO(s); d.setDate(d.getDate() + n); return fmt(d); }
+function addMonths(s, n) {
+  const d = parseISO(s); const day = d.getDate();
+  d.setDate(1); d.setMonth(d.getMonth() + n);
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, last)); return fmt(d);
+}
+function diffDays(a, b) { return Math.round((parseISO(b) - parseISO(a)) / 86400000); }
+const WD = ["日","一","二","三","四","五","六"];
+function prettyDate(s) { const d = parseISO(s); return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}（${WD[d.getDay()]}）`; }
+function shortDate(s) { const d = parseISO(s); const y = d.getFullYear() === new Date().getFullYear() ? "" : d.getFullYear() + "/"; return `${y}${d.getMonth()+1}/${d.getDate()}`; }
+function money(n) { return "NT$" + Math.round(n).toLocaleString("zh-TW"); }
+
+/* ============ 日期文字解析（掃描文字／手打） ============ */
+function toHalf(s) {
+  return s.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 65248))
+    .replace(/[．。]/g, ".").replace(/[／]/g, "/").replace(/[－—–‐]/g, "-").replace(/：/g, ":");
+}
+function validYMD(y, m, d) {
+  if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1990 || y > 2100) return null;
+  const dt = new Date(y, m - 1, d); return dt.getMonth() === m - 1 ? fmt(dt) : null;
+}
+function monthEnd(y, m) { if (m < 1 || m > 12 || y < 1990 || y > 2100) return null; return fmt(new Date(y, m, 0)); }
+function yearFix(y) { y = +y; if (y < 100) return 2000 + y; if (y < 1000) return y + 1911; return y; }
+function parseToken(t) {
+  let m;
+  if ((m = t.match(/^(\d{3,4})[.\/\-年](\d{1,2})[.\/\-月](\d{1,2})日?$/))) {
+    const r = validYMD(yearFix(m[1]), +m[2], +m[3]); if (r) return { date: r, how: m[1].length === 3 ? "民國年月日" : "年月日" };
+  }
+  if ((m = t.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{4})$/))) {
+    let d = +m[1], mo = +m[2]; let how = "日/月/年";
+    if (d <= 12 && mo > 12) { [d, mo] = [mo, d]; how = "月/日/年"; }
+    const r = validYMD(+m[3], mo, d); if (r) return { date: r, how };
+  }
+  if ((m = t.match(/^(\d{2})[.\/\-](\d{1,2})[.\/\-](\d{1,2})$/))) {
+    const r = validYMD(2000 + +m[1], +m[2], +m[3]); if (r) return { date: r, how: "年月日（西元末兩碼）" };
+  }
+  if ((m = t.match(/^(\d{4})(\d{2})(\d{2})$/))) { const r = validYMD(+m[1], +m[2], +m[3]); if (r) return { date: r, how: "年月日" }; }
+  if ((m = t.match(/^(\d{3})(\d{2})(\d{2})$/))) { const r = validYMD(+m[1] + 1911, +m[2], +m[3]); if (r) return { date: r, how: "民國年月日" }; }
+  if ((m = t.match(/^(\d{2})(\d{2})(\d{2})$/))) { const r = validYMD(2000 + +m[1], +m[2], +m[3]); if (r) return { date: r, how: "年月日（西元末兩碼）" }; }
+  if ((m = t.match(/^(\d{3,4})[.\/\-年](\d{1,2})月?$/))) { const r = monthEnd(yearFix(m[1]), +m[2]); if (r) return { date: r, how: "只有年月，取當月最後一天" }; }
+  if ((m = t.match(/^(\d{1,2})[.\/\-](\d{4})$/))) { const r = monthEnd(+m[2], +m[1]); if (r) return { date: r, how: "只有月年，取當月最後一天" }; }
+  return null;
+}
+function parseDateText(raw) {
+  if (!raw) return null;
+  const s = toHalf(String(raw)).replace(/\s+/g, "");
+  if (isISO(s)) return { date: s, how: "" };
+  const re = /\d{1,4}[.\/\-年]\d{1,2}[.\/\-月]\d{1,4}日?|\d{3,4}[.\/\-年]\d{1,2}月?|\d{1,2}[.\/\-]\d{4}|\d{6,8}/g;
+  const kw = s.search(/有效|到期|期限|賞味|EXP|BB|BEST|USE/i);
+  const found = [];
+  let m; while ((m = re.exec(s))) { const p = parseToken(m[0]); if (p) found.push({ ...p, at: m.index }); }
+  if (!found.length) return null;
+  if (kw >= 0) { const after = found.find(f => f.at >= kw); if (after) return after; }
+  return found.reduce((a, b) => (b.date > a.date ? b : a));
+}
+
+/* ============ 規則推算 ============ */
+function ruleDays(cat, loc) {
+  const r = state.settings.rules.find(x => x.cat === cat); if (!r) return 0;
+  return loc === "冷藏" ? r.fridge : loc === "冷凍" ? r.freezer : r.room;
+}
+function defaultLoc(cat) {
+  if (cat === "冷凍食品") return "冷凍";
+  if (["根莖瓜果","麵包烘焙","包裝食品","乾貨穀物","調味料","飲料","藥品","保健食品","保養化妝品","個人清潔用品","居家清潔用品","其他日用品"].includes(cat)) return "常溫";
+  return "冷藏";
+}
+function catRemind(kind, cat) {
+  const list = kind === "sub" ? state.settings.subRules : state.settings.rules;
+  const r = list.find(x => x.cat === cat); return r ? r.remind : (kind === "sub" ? 7 : 3);
+}
+function urgency(it) {
+  if (!it.expiry) return "none";
+  const d = diffDays(today(), it.expiry);
+  if (d < 0) return "expired"; if (d <= 3) return "soon"; if (d <= 7) return "week"; return "ok";
+}
+function daysLabel(it) {
+  if (!it.expiry) return { big: "—", small: "未填日期" };
+  const d = diffDays(today(), it.expiry);
+  if (d < 0) return { big: String(-d), small: "天前到期" };
+  if (d === 0) return { big: "今", small: "今天到期" };
+  return { big: String(d), small: "天後" };
+}
+function monthlyCost(it) {
+  if (it.kind !== "sub" || !it.amount) return 0;
+  if (it.cycle === "年繳") return it.amount / 12; if (it.cycle === "月繳") return it.amount; return 0;
+}
+
+/* ============ 儲存 ============ */
+const DB_NAME = "expiry-keeper", STORE = "kv";
+function openIDB() {
+  return new Promise((res, rej) => {
+    if (!("indexedDB" in window)) return rej(new Error("no idb"));
+    const r = indexedDB.open(DB_NAME, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(STORE);
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+async function loadState() {
+  try {
+    const db = await openIDB();
+    const v = await new Promise((res, rej) => { const q = db.transaction(STORE).objectStore(STORE).get("state"); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+    storageMode = "idb"; return v || null;
+  } catch (e) {
+    try { const v = localStorage.getItem(DB_NAME); storageMode = "local"; return v ? JSON.parse(v) : null; }
+    catch (e2) { storageMode = "memory"; return null; }
+  }
+}
+async function saveState() {
+  const data = JSON.parse(JSON.stringify(state));
+  if (storageMode === "idb") {
+    try {
+      const db = await openIDB();
+      await new Promise((res, rej) => { const tx = db.transaction(STORE, "readwrite"); tx.objectStore(STORE).put(data, "state"); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+      return;
+    } catch (e) { storageMode = "local"; }
+  }
+  if (storageMode === "local") {
+    try { localStorage.setItem(DB_NAME, JSON.stringify(data)); return; } catch (e) { storageMode = "memory"; }
+  }
+  renderBanner();
+}
+function mergeSettings(s) {
+  const out = structuredClone(DEFAULT_SETTINGS);
+  if (!s) return out;
+  Object.assign(out, s);
+  out.ai = Object.assign({}, DEFAULT_SETTINGS.ai, s.ai || {});
+  const fresh = (s.rulesVersion || 1) < RULES_VERSION; // 規則表改版時改用新預設
+  const rules = !fresh && Array.isArray(s.rules) ? s.rules : [];
+  const subRules = !fresh && Array.isArray(s.subRules) ? s.subRules : [];
+  out.rules = DEFAULT_RULES.map(d => Object.assign({}, d, rules.find(r => r.cat === d.cat) || {}));
+  out.subRules = DEFAULT_SUB_RULES.map(d => Object.assign({}, d, subRules.find(r => r.cat === d.cat) || {}));
+  out.rulesVersion = RULES_VERSION;
+  delete out.remindItem; delete out.remindSub;
+  return out;
+}
+
+/* ============ 提示訊息 ============ */
+let toastTimer;
+function toast(msg) {
+  const root = $("#toast-root"); root.replaceChildren(h("div", { class: "toast", text: msg }));
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => root.replaceChildren(), 2600);
+}
+function renderBanner() {
+  const slot = $("#banner-slot"); slot.replaceChildren();
+  if (storageMode === "memory") slot.append(h("div", { class: "banner", text: "此瀏覽器無法儲存資料，關閉頁面後資料會消失。請用 Safari 開啟並「加入主畫面」後使用。" }));
+}
+
+/* ============ 圖示 ============ */
+const ICON = {
+  search: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4-4"/></svg>',
+  close: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  cal: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+  cam: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  trash: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"/></svg>'
+};
+
+/* ============ 導覽 ============ */
+function setTab(tab) {
+  if (tab === "add") { openAddSheet(); return; }
+  ui.tab = tab;
+  render(); window.scrollTo(0, 0);
+}
+document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+
+function render() {
+  document.querySelectorAll(".tab").forEach(b => { if (b.dataset.tab === ui.tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
+  const active = state.items.filter(i => i.status === "active");
+  const t = parseISO(today());
+  const titles = { overview: "效期管家", history: "使用紀錄", settings: "設定" };
+  $("#page-title").textContent = titles[ui.tab];
+  $("#page-sub").textContent = `${t.getFullYear()} 年 ${t.getMonth()+1} 月 ${t.getDate()} 日 星期${WD[t.getDay()]}・追蹤中 ${active.length} 項`;
+  renderBanner();
+  const v = $("#view"); v.replaceChildren();
+  if (ui.tab === "overview") renderOverview(v, active);
+  else if (ui.tab === "history") renderHistory(v);
+  else renderSettings(v);
+}
+
+/* ============ 總覽 ============ */
+function renderOverview(v, active) {
+  const cnt = { expired: 0, soon: 0, week: 0 };
+  active.forEach(i => { const u = urgency(i); if (cnt[u] != null) cnt[u]++; });
+  const statBtn = (key, label, n) => h("button", { class: "stat " + key, "aria-pressed": String(ui.urgency === key), onclick: () => { ui.urgency = ui.urgency === key || key === "all" ? null : key; render(); } },
+    h("span", { class: "k", text: label }), h("span", { class: "v num", text: n }));
+  v.append(h("section", { class: "summary", "aria-label": "到期摘要" },
+    statBtn("expired", "已過期", cnt.expired), statBtn("soon", "3 天內", cnt.soon),
+    statBtn("week", "7 天內", cnt.week), statBtn("all", "追蹤中", active.length)));
+
+  if (!state.items.length) { v.append(emptyState()); return; }
+
+  const search = h("input", { type: "search", id: "q", placeholder: "搜尋名稱、類別、備註", value: ui.q, "aria-label": "搜尋" });
+  search.addEventListener("input", () => { ui.q = search.value; drawList(); });
+  const chips = h("div", { class: "chips", role: "group", "aria-label": "篩選" },
+    ["全部", ...LOCS, "訂閱會員"].map(k => h("button", { class: "chip", "aria-pressed": String(ui.loc === k), onclick: () => { ui.loc = k; render(); } }, k)));
+  v.append(h("div", { class: "toolbar" }, h("label", { class: "search", svg: ICON.search }), chips));
+  $(".search", v).append(search);
+
+  const listHost = h("div"); v.append(listHost);
+  function drawList() {
+    listHost.replaceChildren();
+    let rows = active.slice();
+    if (ui.loc === "訂閱會員") rows = rows.filter(i => i.kind === "sub");
+    else if (ui.loc !== "全部") rows = rows.filter(i => i.kind === "item" && i.location === ui.loc);
+    if (ui.urgency) rows = rows.filter(i => urgency(i) === ui.urgency);
+    const q = ui.q.trim().toLowerCase();
+    if (q) rows = rows.filter(i => [i.name, i.category, i.note, i.plan].join(" ").toLowerCase().includes(q));
+    rows.sort((a, b) => (a.expiry || "9999") < (b.expiry || "9999") ? -1 : (a.expiry || "9999") > (b.expiry || "9999") ? 1 : a.name.localeCompare(b.name, "zh-Hant"));
+
+    if (ui.loc === "訂閱會員") {
+      const subs = active.filter(i => i.kind === "sub");
+      const m = subs.reduce((s, i) => s + monthlyCost(i), 0);
+      listHost.append(h("div", { class: "subcost num" }, h("span", null, "訂閱每月約當支出 ", h("b", { text: money(m) })), h("span", { text: `全年約 ${money(m * 12)}` })));
+    }
+    if (!rows.length) { listHost.append(h("div", { class: "note", style: "margin-top:16px", text: "沒有符合條件的項目。" })); return; }
+
+    const groups = [
+      ["expired", "已過期", "var(--danger)"], ["soon", "3 天內到期", "var(--warn)"], ["week", "7 天內到期", "var(--accent)"],
+      ["ok", "7 天以後", "var(--ok)"], ["none", "尚未填日期", "var(--ink-2)"]
+    ];
+    for (const [key, label, color] of groups) {
+      const g = rows.filter(i => urgency(i) === key); if (!g.length) continue;
+      listHost.append(h("section", { class: "group" },
+        h("h3", { class: "group-h" }, h("span", { class: "dot", style: `background:${color}` }), label, h("span", { class: "cnt num", text: `・${g.length}` })),
+        h("div", { class: "list" }, g.map(rowEl))));
+    }
+    const withDate = rows.filter(i => i.expiry);
+    if (withDate.length) listHost.append(h("div", { class: "btn-row", style: "margin-top:16px" },
+      h("button", { class: "btn ghost", onclick: () => exportICS(withDate, "效期管家-到期提醒.ics") }, h("span", { svg: ICON.cal }), `將這 ${withDate.length} 項加入行事曆`)));
+  }
+  drawList();
+}
+function rowEl(it) {
+  const u = urgency(it), dl = daysLabel(it);
+  const meta = [];
+  if (it.kind === "item") {
+    meta.push(h("span", { class: "tag", text: it.location }));
+    if (it.qty) meta.push(h("span", { class: "num", text: `${it.qty}${it.unit || ""}` }));
+    meta.push(h("span", { text: it.category }));
+  } else {
+    meta.push(h("span", { class: "tag gold", text: "訂閱" }));
+    if (it.plan) meta.push(h("span", { text: it.plan }));
+    if (it.amount) meta.push(h("span", { class: "num", text: `${money(it.amount)}／${it.cycle === "年繳" ? "年" : it.cycle === "月繳" ? "月" : "次"}` }));
+    meta.push(h("span", { text: it.autoRenew ? "自動續訂" : "手動續訂" }));
+  }
+  return h("button", { class: "row", onclick: () => openEditSheet(it.id) },
+    h("span", { class: "days u-" + u }, h("b", { class: "num", text: dl.big }), h("small", { text: dl.small })),
+    h("span", { class: "main" }, h("div", { class: "name", text: it.name }), h("div", { class: "meta" }, meta)),
+    h("span", { class: "date num" }, it.expiry ? shortDate(it.expiry) : "—", h("span", { class: "src", text: it.dateSource || "" })));
+}
+function emptyState() {
+  return h("section", { class: "empty" },
+    h("h3", { text: "開始記錄第一筆" }),
+    h("ol", { class: "steps" },
+      h("li", null, h("span", { class: "badge", text: "01" }), h("span", null, "點下方「新增」，選擇實體物品或訂閱會員。")),
+      h("li", null, h("span", { class: "badge", text: "02" }), h("span", null, "點品名或日期欄位，選「掃描文字」對準包裝即可帶入；生鮮會依類別自動推算到期日。")),
+      h("li", null, h("span", { class: "badge", text: "03" }), h("span", null, "儲存後按「加入行事曆」，到期前 iPhone 會準時提醒。"))),
+    h("div", { class: "btn-row" },
+      h("button", { class: "btn", onclick: openAddSheet }, "新增第一筆"),
+      h("button", { class: "btn ghost", onclick: loadExamples }, "載入範例看看")));
+}
+async function loadExamples() {
+  const t = today();
+  const ex = [
+    { kind: "item", name: "菠菜", category: "葉菜類", location: "冷藏", qty: 1, unit: "把", purchaseDate: addDays(t, -2), expiry: addDays(t, 2), dateSource: "規則推算" },
+    { kind: "item", name: "鮮奶 936ml", category: "乳製品", location: "冷藏", qty: 1, unit: "瓶", purchaseDate: addDays(t, -1), expiry: addDays(t, 6), dateSource: "標示日期" },
+    { kind: "item", name: "雞胸肉", category: "肉類", location: "冷凍", qty: 2, unit: "盒", purchaseDate: addDays(t, -10), expiry: addDays(t, 80), dateSource: "規則推算" },
+    { kind: "item", name: "吐司", category: "麵包烘焙", location: "常溫", qty: 1, unit: "條", purchaseDate: addDays(t, -4), expiry: addDays(t, -1), dateSource: "規則推算" },
+    { kind: "sub", name: "影音串流服務", category: "影音串流", plan: "標準方案", amount: 390, cycle: "月繳", autoRenew: true, expiry: addDays(t, 5), dateSource: "週期推算" },
+    { kind: "sub", name: "雲端硬碟 200GB", category: "雲端服務", plan: "年繳方案", amount: 900, cycle: "年繳", autoRenew: false, expiry: addDays(t, 40), dateSource: "標示日期" }
+  ];
+  for (const e of ex) state.items.push(finalizeItem({ ...e, note: "範例資料" }));
+  await saveState(); render(); toast("已載入 6 筆範例資料，可在設定中一次清除");
+}
+
+/* ============ 項目建立與正規化 ============ */
+function blankDraft(kind) {
+  const t = today();
+  if (kind === "sub") return { kind, name: "", category: SUB_CATS[0], plan: "", amount: "", cycle: "月繳", autoRenew: true, payMethod: "", expiry: "", dateSource: "手動輸入", remindDays: catRemind("sub", SUB_CATS[0]), note: "" };
+  return { kind: "item", name: "", category: "葉菜類", location: "冷藏", qty: 1, unit: "", purchaseDate: t, expiry: "", dateSource: "規則推算", remindDays: catRemind("item", "葉菜類"), note: "" };
+}
+function finalizeItem(d, existing) {
+  const now = new Date().toISOString();
+  const base = {
+    id: existing?.id || uid(), kind: d.kind === "sub" ? "sub" : "item",
+    name: String(d.name || "").trim(), category: d.category, expiry: isISO(d.expiry) ? d.expiry : "",
+    dateSource: d.dateSource || "手動輸入", remindDays: Math.max(0, parseInt(d.remindDays, 10) || 0),
+    note: String(d.note || "").trim(), status: existing?.status || "active", closedAt: existing?.closedAt || "",
+    createdAt: existing?.createdAt || now, updatedAt: now
+  };
+  if (base.kind === "item") {
+    if (d.remindDays === undefined || d.remindDays === "") base.remindDays = catRemind("item", base.category);
+    return Object.assign(base, { location: LOCS.includes(d.location) ? d.location : "冷藏", qty: d.qty === "" ? "" : Number(d.qty) || "", unit: String(d.unit || "").trim(), purchaseDate: isISO(d.purchaseDate) ? d.purchaseDate : today() });
+  }
+  if (d.remindDays === undefined || d.remindDays === "") base.remindDays = catRemind("sub", base.category);
+  return Object.assign(base, { plan: String(d.plan || "").trim(), amount: d.amount === "" || d.amount == null ? "" : Number(d.amount) || "", cycle: CYCLES.includes(d.cycle) ? d.cycle : "月繳", autoRenew: !!d.autoRenew, payMethod: String(d.payMethod || "").trim() });
+}
+function fromAI(o) {
+  const kind = o && o.kind === "sub" ? "sub" : "item";
+  const d = blankDraft(kind);
+  d.name = String(o.name || "").trim();
+  d.note = String(o.note || "").trim();
+  const exp = o.expiry && (isISO(o.expiry) ? o.expiry : parseDateText(o.expiry)?.date);
+  if (kind === "item") {
+    d.category = ITEM_CATS.includes(o.category) ? o.category : "其他";
+    d.location = LOCS.includes(o.location) ? o.location : defaultLoc(d.category);
+    if (o.qty != null && o.qty !== "") d.qty = Number(o.qty) || 1;
+    d.unit = String(o.unit || "").trim();
+    d.remindDays = catRemind("item", d.category);
+    if (exp) { d.expiry = exp; d.dateSource = "標示日期"; }
+    else { const n = ruleDays(d.category, d.location); d.expiry = n > 0 ? addDays(d.purchaseDate, n) : ""; d.dateSource = n > 0 ? "規則推算" : "手動輸入"; }
+  } else {
+    d.category = SUB_CATS.includes(o.category) ? o.category : "其他訂閱";
+    d.plan = String(o.plan || "").trim();
+    d.amount = o.amount == null || o.amount === "" ? "" : Number(o.amount) || "";
+    d.cycle = CYCLES.includes(o.cycle) ? o.cycle : "月繳";
+    d.autoRenew = o.autoRenew !== false;
+    d.remindDays = catRemind("sub", d.category);
+    if (exp) { d.expiry = exp; d.dateSource = "標示日期"; }
+  }
+  return d;
+}
+function extractJSON(text) {
+  const t = String(text || "");
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const body = fence ? fence[1] : t;
+  const a = body.indexOf("["), b = body.lastIndexOf("]");
+  const o1 = body.indexOf("{"), o2 = body.lastIndexOf("}");
+  let val = null;
+  try { val = JSON.parse(body.trim()); } catch (e) {
+    try { if (a >= 0 && b > a) val = JSON.parse(body.slice(a, b + 1)); else if (o1 >= 0 && o2 > o1) val = JSON.parse(body.slice(o1, o2 + 1)); } catch (e2) { val = null; }
+  }
+  if (val && !Array.isArray(val)) val = Array.isArray(val.items) ? val.items : [val];
+  return Array.isArray(val) ? val.filter(x => x && typeof x === "object") : null;
+}
+function aiPrompt(forChatApp) {
+  return [
+    `你是居家效期管理助理。請辨識圖片中的物品、食材，或訂閱／會員資訊。今天是 ${today()}。`,
+    `請輸出 JSON 陣列，每個品項一個物件，欄位如下：`,
+    `{"kind":"item 或 sub（item＝實體物品，sub＝訂閱或會員）","name":"品名或服務名稱，繁體中文，可保留品牌","category":"類別","location":"冷藏／冷凍／常溫（僅 item）","qty":數量,"unit":"單位","expiry":"YYYY-MM-DD 或 null","plan":"方案名稱（僅 sub）","amount":金額數字或 null（僅 sub，新台幣）,"cycle":"月繳／年繳／一次性（僅 sub）","autoRenew":true 或 false,"note":"補充說明"}`,
+    `item 的 category 只能是：${ITEM_CATS.join("、")}`,
+    `sub 的 category 只能是：${SUB_CATS.join("、")}`,
+    `規則：`,
+    `1. 只有清楚看到有效日期、保存期限、賞味期限、到期日或下次續訂／扣款日時才填 expiry，否則填 null，不要猜測。`,
+    `2. 民國年請換算為西元（例如 115 年＝2026 年）；只看到年月時填該月最後一天；只看到製造日期與保存期間時請推算到期日，並在 note 註明。`,
+    `3. 同一商品的多張照片（例如正面與日期面）合併為一筆。`,
+    `4. 收據上的每個商品各自一筆；折扣、購物袋、發票資訊不要列入。`,
+    forChatApp ? `5. 請只用一個 \`\`\`json 程式碼區塊輸出結果，不要其他說明。` : `5. 只輸出 JSON 陣列，不要其他文字。`
+  ].join("\n");
+}
+
+/* ============ 表單編輯器 ============ */
+function field(label, control, opts = {}) {
+  const id = control.id || (control.id = fid("f"));
+  const lab = h("label", { for: id, text: label });
+  return h("div", { class: "f" + (opts.full ? " full" : "") }, lab, control, opts.help || null);
+}
+function groupedSelect(groups, value) {
+  const s = h("select", { id: fid("s") }, groups.map(([label, opts]) => h("optgroup", { label }, opts.map(o => h("option", { value: o, text: o })))));
+  s.value = value; return s;
+}
+function selectEl(options, value) {
+  const s = h("select", { id: fid("s") }, options.map(o => h("option", { value: o, text: o })));
+  s.value = value; return s;
+}
+function dateField(label, value, onChange, opts = {}) {
+  const txt = h("input", { type: "text", id: fid("d"), inputmode: "text", autocomplete: "off", placeholder: opts.placeholder || "可掃描文字，如 115.10.12", value: value || "" });
+  const help = h("div", { class: "help" });
+  const native = h("input", { type: "date", "aria-label": label + "（月曆選擇）", tabindex: "-1" });
+  if (isISO(value)) native.value = value;
+  const pick = h("span", { class: "pick", svg: ICON.cal }); pick.append(native);
+  let current = isISO(value) ? value : "";
+  function show(res) {
+    if (!txt.value.trim()) { help.className = "help"; help.textContent = opts.emptyHint || ""; return; }
+    if (res) { help.className = "help ok"; help.textContent = "解讀為 " + prettyDate(res.date) + (res.how ? `・${res.how}` : ""); }
+    else { help.className = "help bad"; help.textContent = "無法辨識日期，請確認格式或用右側月曆選擇"; }
+  }
+  function commit(fromUser) {
+    const res = parseDateText(txt.value);
+    show(res);
+    current = res ? res.date : (txt.value.trim() ? current : "");
+    if (res) native.value = res.date;
+    onChange(current, fromUser);
+  }
+  txt.addEventListener("change", () => commit(true));
+  txt.addEventListener("blur", () => { const r = parseDateText(txt.value); if (r) txt.value = r.date; });
+  native.addEventListener("change", () => { if (native.value) { txt.value = native.value; commit(true); } });
+  show(isISO(value) ? { date: value, how: "" } : null);
+  const wrap = h("div", { class: "f" + (opts.full ? " full" : "") }, h("label", { for: txt.id, text: label }), h("div", { class: "date-wrap" }, txt, pick), help);
+  wrap.setValue = (v, how) => { txt.value = v || ""; if (isISO(v)) native.value = v; current = isISO(v) ? v : ""; show(v ? { date: v, how: how || "" } : null); };
+  wrap.setEmptyHint = (s) => { opts.emptyHint = s; if (!txt.value.trim()) show(null); };
+  return wrap;
+}
+
+function buildEditor(draft, { removable, onRemove } = {}) {
+  const d = structuredClone(draft);
+  let remindTouched = !!draft.id; // 既有項目保留原本的提醒天數
+  const card = h("div", { class: "card" });
+  function draw() {
+    card.replaceChildren();
+    const head = h("div", { class: "card-h" },
+      h("div", { class: "seg", style: "flex:1", role: "group", "aria-label": "類型" },
+        h("button", { type: "button", "aria-pressed": String(d.kind === "item"), onclick: () => switchKind("item") }, "實體物品"),
+        h("button", { type: "button", "aria-pressed": String(d.kind === "sub"), onclick: () => switchKind("sub") }, "訂閱會員")),
+      removable ? h("button", { type: "button", class: "x", "aria-label": "移除此筆", svg: ICON.close, onclick: onRemove }) : null);
+    card.append(head);
+    const form = h("div", { class: "form" }); card.append(form);
+
+    const name = h("input", { type: "text", id: fid("n"), value: d.name, placeholder: d.kind === "item" ? "可掃描包裝上的品名" : "例如 Netflix、Costco 會員", autocomplete: "off" });
+    name.addEventListener("input", () => d.name = name.value);
+    form.append(field(d.kind === "item" ? "品名" : "服務名稱", name, { full: true }));
+    const remind = h("input", { type: "number", inputmode: "numeric", min: "0", step: "1", id: fid("rm"), value: d.remindDays });
+    remind.addEventListener("input", () => { d.remindDays = remind.value; remindTouched = true; });
+    const syncRemind = () => { if (!remindTouched) { d.remindDays = catRemind(d.kind, d.category); remind.value = d.remindDays; } };
+    const note = h("input", { type: "text", id: fid("nt"), value: d.note, placeholder: "選填" });
+    note.addEventListener("input", () => d.note = note.value);
+
+    if (d.kind === "item") {
+      const cat = groupedSelect(ITEM_GROUPS, d.category);
+      const loc = selectEl(LOCS, d.location);
+      const qty = h("input", { type: "number", inputmode: "decimal", min: "0", step: "any", id: fid("q"), value: d.qty });
+      const unit = h("input", { type: "text", id: fid("u"), value: d.unit, placeholder: "盒、包、顆…" });
+      const src = selectEl(SOURCES.filter(s => s !== "週期推算"), d.dateSource);
+      const pd = dateField("購買日", d.purchaseDate, (v) => { if (v) { d.purchaseDate = v; recompute(); } }, { placeholder: "YYYY-MM-DD", full: true });
+      const ex = dateField("到期日", d.expiry, (v, user) => { d.expiry = v; if (user) { d.dateSource = "手動輸入"; src.value = d.dateSource; } updateRuleHint(); }, { full: true });
+      function updateRuleHint() {
+        const n = ruleDays(d.category, d.location);
+        ex.setEmptyHint(n > 0 ? `依規則：${d.category}${d.location} ${n} 天` : `${d.category}${d.location}沒有預設天數，請依包裝填寫`);
+      }
+      function recompute() {
+        if (d.dateSource !== "規則推算") { updateRuleHint(); return; }
+        const n = ruleDays(d.category, d.location);
+        d.expiry = n > 0 ? addDays(d.purchaseDate, n) : "";
+        ex.setValue(d.expiry, n > 0 ? `規則推算：${d.category}${d.location} ${n} 天` : "");
+        updateRuleHint();
+      }
+      cat.addEventListener("change", () => {
+        d.category = cat.value; syncRemind();
+        if (!d.id) { d.location = defaultLoc(d.category); loc.value = d.location; }
+        recompute();
+      });
+      loc.addEventListener("change", () => { d.location = loc.value; recompute(); });
+      qty.addEventListener("input", () => d.qty = qty.value);
+      unit.addEventListener("input", () => d.unit = unit.value);
+      src.addEventListener("change", () => { d.dateSource = src.value; recompute(); });
+      form.append(field("類別", cat), field("存放位置", loc), field("數量", qty), field("單位", unit), pd, ex, field("日期來源", src), field("提前提醒（天）", remind), field("備註", note, { full: true }));
+      if (d.dateSource === "規則推算" && !d.expiry) recompute(); else updateRuleHint();
+    } else {
+      const cat = selectEl(SUB_CATS, d.category);
+      const plan = h("input", { type: "text", id: fid("p"), value: d.plan, placeholder: "例如 標準方案" });
+      const amount = h("input", { type: "number", inputmode: "decimal", min: "0", step: "any", id: fid("a"), value: d.amount, placeholder: "新台幣" });
+      const cycle = selectEl(CYCLES, d.cycle);
+      const auto = h("input", { type: "checkbox", id: fid("r"), checked: d.autoRenew });
+      const pay = h("input", { type: "text", id: fid("pm"), value: d.payMethod, placeholder: "例如 信用卡、Apple 帳號（勿填卡號）" });
+      const src = selectEl(SOURCES.filter(s => s !== "規則推算"), d.dateSource);
+      const ex = dateField(d.autoRenew ? "下次續訂／扣款日" : "到期日", d.expiry, (v, user) => { d.expiry = v; if (user) { d.dateSource = "手動輸入"; src.value = d.dateSource; } }, { full: true });
+      cat.addEventListener("change", () => { d.category = cat.value; syncRemind(); });
+      plan.addEventListener("input", () => d.plan = plan.value);
+      amount.addEventListener("input", () => d.amount = amount.value);
+      cycle.addEventListener("change", () => d.cycle = cycle.value);
+      auto.addEventListener("change", () => { d.autoRenew = auto.checked; ex.querySelector("label").textContent = d.autoRenew ? "下次續訂／扣款日" : "到期日"; });
+      pay.addEventListener("input", () => d.payMethod = pay.value);
+      src.addEventListener("change", () => d.dateSource = src.value);
+      form.append(field("類別", cat), field("方案", plan), field("金額", amount), field("週期", cycle),
+        h("div", { class: "f" }, h("label", { for: auto.id, text: "續訂方式" }), h("label", { class: "switch", for: auto.id }, auto, "自動續訂")),
+        field("日期來源", src), ex, field("提前提醒（天）", remind), field("付款方式", pay), field("備註", note, { full: true }));
+    }
+  }
+  function switchKind(k) {
+    if (k === d.kind) return;
+    const keep = { name: d.name, note: d.note };
+    Object.keys(d).forEach(key => delete d[key]);
+    Object.assign(d, blankDraft(k), keep); remindTouched = false; draw();
+  }
+  draw();
+  card.getDraft = () => d;
+  card.validate = () => {
+    if (!String(d.name || "").trim()) return "請填寫" + (d.kind === "item" ? "品名" : "服務名稱");
+    if (!isISO(d.expiry)) return `「${d.name}」尚未填寫有效的到期日`;
+    return null;
+  };
+  return card;
+}
+
+/* ============ Sheet ============ */
+let lastFocus = null;
+function openSheet(title, bodyNodes) {
+  lastFocus = document.activeElement;
+  const body = h("div", { class: "panel-b" }, bodyNodes);
+  const sheet = h("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-label": title },
+    h("div", { class: "panel" },
+      h("div", { class: "panel-h" }, h("h3", { text: title }), h("button", { class: "x", "aria-label": "關閉", svg: ICON.close, onclick: closeSheet })),
+      body));
+  sheet.addEventListener("click", (e) => { if (e.target === sheet) closeSheet(); });
+  $("#sheet-root").replaceChildren(sheet);
+  document.body.style.overflow = "hidden";
+  return body;
+}
+function closeSheet() {
+  $("#sheet-root").replaceChildren(); document.body.style.overflow = "";
+  if (lastFocus && lastFocus.focus) lastFocus.focus();
+}
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("#sheet-root").firstChild) closeSheet(); });
+
+/* ============ 新增 ============ */
+function openAddSheet() {
+  const hasAI = !!state.settings.ai.key;
+  const modes = [["manual", "手動輸入"], ["paste", "貼上匯入"]];
+  if (hasAI) modes.push(["photo", "拍照辨識"]);
+  let mode = "manual";
+  const content = h("div", { style: "display:grid;gap:14px" });
+  const seg = h("div", { class: "seg", role: "group", "aria-label": "新增方式" });
+  function drawSeg() { seg.replaceChildren(...modes.map(([k, l]) => h("button", { type: "button", "aria-pressed": String(mode === k), onclick: () => { mode = k; drawSeg(); drawMode(); } }, l))); }
+  function drawMode() {
+    content.replaceChildren();
+    if (mode === "manual") manualMode(content);
+    else if (mode === "paste") pasteMode(content);
+    else photoMode(content);
+  }
+  const body = openSheet("新增項目", [seg, content]);
+  if (!hasAI) body.append(h("div", { class: "note" }, "想直接拍照辨識？到「設定」填入免費的 Gemini 金鑰，這裡就會出現「拍照辨識」。"));
+  drawSeg(); drawMode();
+}
+function manualMode(host) {
+  const ed = buildEditor(blankDraft("item"));
+  const tip = h("div", { class: "note" }, h("b", null, "小技巧："), "點品名或到期日欄位，在鍵盤上方或長按選單選「掃描文字」，把鏡頭對準包裝文字即可帶入。");
+  const save = h("button", { class: "btn block", onclick: async () => {
+    const err = ed.validate(); if (err) return toast(err);
+    const it = finalizeItem(ed.getDraft()); state.items.push(it); await saveState();
+    closeSheet(); ui.tab = "overview"; render(); toastWithCal(it);
+  } }, "儲存");
+  host.append(tip, ed, save);
+}
+function reviewList(host, drafts, doneLabel) {
+  const list = h("div", { style: "display:grid;gap:12px" });
+  const editors = [];
+  function redraw() {
+    list.replaceChildren(h("div", { class: "status", text: `共 ${editors.length} 筆，請確認內容後儲存` }), ...editors);
+    saveBtn.disabled = !editors.length;
+  }
+  const saveBtn = h("button", { class: "btn block", onclick: async () => {
+    for (const ed of editors) { const err = ed.validate(); if (err) return toast(err); }
+    const added = editors.map(ed => finalizeItem(ed.getDraft()));
+    state.items.push(...added); await saveState();
+    closeSheet(); ui.tab = "overview"; render();
+    toast(`已新增 ${added.length} 筆`);
+  } }, doneLabel || "全部儲存");
+  drafts.forEach(d => {
+    const ed = buildEditor(d, { removable: true, onRemove: () => { editors.splice(editors.indexOf(ed), 1); redraw(); } });
+    editors.push(ed);
+  });
+  host.append(list, saveBtn); redraw();
+}
+function pasteMode(host) {
+  const ta = h("textarea", { id: "paste-box", placeholder: "把 AI 回覆的內容整段貼在這裡" });
+  const copyBtn = h("button", { class: "btn ghost sm", type: "button", onclick: async () => {
+    const txt = aiPrompt(true);
+    try { await navigator.clipboard.writeText(txt); toast("已複製 AI 指令"); }
+    catch (e) { const pre = h("textarea", { readonly: true, style: "width:100%;min-height:160px", value: txt }); host.prepend(pre); pre.select(); toast("請手動全選複製上方指令"); }
+  } }, "複製 AI 指令");
+  const out = h("div");
+  const parseBtn = h("button", { class: "btn block", type: "button", onclick: () => {
+    const arr = extractJSON(ta.value);
+    if (!arr || !arr.length) return toast("找不到可匯入的資料，請確認貼上的是 AI 回覆的完整內容");
+    out.replaceChildren(); reviewList(out, arr.map(fromAI)); parseBtn.hidden = true;
+  } }, "解析內容");
+  host.append(
+    h("div", { class: "card" },
+      h("div", { class: "card-h" }, h("div", { class: "t" }, h("span", { class: "badge", text: "01" }), "複製指令")),
+      h("div", { class: "help", style: "font-size:16px;color:var(--ink-2)" }, "打開 Claude、ChatGPT 或 Gemini App，貼上指令並附上照片（可一次多張，也可以是收據或訂閱截圖）。"),
+      h("div", null, copyBtn)),
+    h("div", { class: "card" },
+      h("div", { class: "card-h" }, h("div", { class: "t" }, h("span", { class: "badge", text: "02" }), "貼上 AI 回覆")),
+      field("AI 回覆內容", ta, { full: true }), parseBtn),
+    out);
+}
+function photoMode(host) {
+  const files = [];
+  const thumbs = h("div", { class: "thumbs" });
+  const status = h("div", { class: "status" });
+  const out = h("div");
+  const mkInput = (capture) => {
+    const inp = h("input", { type: "file", accept: "image/*", multiple: capture ? null : true, capture: capture ? "environment" : null, hidden: true });
+    inp.addEventListener("change", () => { for (const f of inp.files) if (files.length < 6) files.push(f); inp.value = ""; drawThumbs(); });
+    return inp;
+  };
+  const camIn = mkInput(true), libIn = mkInput(false);
+  function drawThumbs() {
+    thumbs.replaceChildren(...files.map(f => { const img = h("img", { alt: "已選照片" }); img.src = URL.createObjectURL(f); return img; }));
+    runBtn.disabled = !files.length;
+    status.textContent = files.length ? `已選 ${files.length} 張（同一商品的正面與日期面可一起辨識，最多 6 張）` : "";
+  }
+  const runBtn = h("button", { class: "btn block", disabled: true, onclick: async () => {
+    runBtn.disabled = true; status.replaceChildren(h("span", { class: "spin" }), "辨識中，約需 5–20 秒…");
+    try {
+      const arr = await geminiRecognize(files);
+      if (!arr || !arr.length) throw { friendly: "沒有辨識到品項，請換個角度或光線再拍一次" };
+      status.textContent = ""; out.replaceChildren(); reviewList(out, arr.map(fromAI));
+      runBtn.hidden = true;
+    } catch (e) {
+      status.textContent = e.friendly || "辨識失敗，請稍後再試"; runBtn.disabled = false;
+    }
+  } }, "開始辨識");
+  host.append(
+    h("div", { class: "btn-row" },
+      h("button", { class: "btn ghost", onclick: () => camIn.click() }, h("span", { svg: ICON.cam }), "拍照"),
+      h("button", { class: "btn ghost", onclick: () => libIn.click() }, "從相簿選擇")),
+    camIn, libIn, thumbs, status, runBtn, out,
+    h("div", { class: "note" }, "照片會縮小後送到 Google Gemini 辨識，不會存在本 App。訂閱截圖請先裁掉 Email、帳號等個人資訊。"));
+}
+
+/* ============ Gemini ============ */
+function fileToJpegBase64(file, maxSide = 1600) {
+  return new Promise((res, rej) => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const s = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      res(c.toDataURL("image/jpeg", 0.85).split(",")[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej({ friendly: "無法讀取這張照片，請改用 JPG 或 PNG" }); };
+    img.src = url;
+  });
+}
+async function geminiCall(path, init) {
+  const key = state.settings.ai.key;
+  const sep = path.includes("?") ? "&" : "?";
+  let res;
+  try { res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${path}${sep}key=${encodeURIComponent(key)}`, init); }
+  catch (e) { throw { friendly: "無法連線到 Gemini，請確認網路連線" }; }
+  if (!res.ok) {
+    const j = await res.json().catch(() => null); const msg = j?.error?.message || "";
+    if (res.status === 400 && /API key/i.test(msg)) throw { friendly: "金鑰無效，請到設定重新貼上金鑰" };
+    if (res.status === 403) throw { friendly: "金鑰沒有權限，請確認已在 Google AI Studio 建立金鑰" };
+    if (res.status === 404) throw { friendly: "找不到這個模型，請到設定按「取得可用模型」重新選擇" };
+    if (res.status === 429) throw { friendly: "今天的免費額度已用完或太頻繁，請稍後再試" };
+    throw { friendly: `辨識服務回應錯誤（${res.status}）${msg ? "：" + msg.slice(0, 80) : ""}` };
+  }
+  return res.json();
+}
+async function geminiRecognize(files) {
+  const parts = [{ text: aiPrompt(false) }];
+  for (const f of files) parts.push({ inline_data: { mime_type: "image/jpeg", data: await fileToJpegBase64(f) } });
+  const model = state.settings.ai.model || "gemini-flash-latest";
+  const j = await geminiCall(`models/${encodeURIComponent(model)}:generateContent`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } })
+  });
+  const text = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
+  return extractJSON(text);
+}
+async function geminiModels() {
+  const j = await geminiCall("models?pageSize=200", { method: "GET" });
+  return (j.models || [])
+    .filter(m => (m.supportedGenerationMethods || []).includes("generateContent"))
+    .map(m => m.name.replace(/^models\//, ""))
+    .filter(n => /flash/i.test(n) && !/image|tts|live|audio|embedding|thinking-exp/i.test(n))
+    .sort().reverse();
+}
+
+/* ============ 編輯 ============ */
+function openEditSheet(id) {
+  const it = state.items.find(i => i.id === id); if (!it) return;
+  const ed = buildEditor(it);
+  const save = h("button", { class: "btn", onclick: async () => {
+    const err = ed.validate(); if (err) return toast(err);
+    Object.assign(it, finalizeItem(ed.getDraft(), it)); await saveState(); closeSheet(); render(); toast("已儲存");
+  } }, "儲存變更");
+  const cal = h("button", { class: "btn ghost", onclick: () => { const d = ed.getDraft(); if (!isISO(d.expiry)) return toast("請先填寫到期日"); exportICS([finalizeItem(d, it)], `${it.name}-到期提醒.ics`); } }, h("span", { svg: ICON.cal }), "加入行事曆");
+  const close = async (status, msg) => { it.status = status; it.closedAt = today(); it.updatedAt = new Date().toISOString(); await saveState(); closeSheet(); render(); toast(msg); };
+  let actions;
+  if (it.kind === "item") {
+    actions = h("div", { class: "btn-row" },
+      h("button", { class: "btn ghost", onclick: () => close("used", "已標記為用完") }, "已用完"),
+      h("button", { class: "btn ghost", onclick: () => close("discarded", "已標記為丟棄") }, "已丟棄"));
+  } else {
+    const renew = h("button", { class: "btn ghost", onclick: async () => {
+      if (it.cycle === "一次性" || !it.expiry) return toast("一次性方案無法推算下一期，請直接修改日期");
+      it.expiry = addMonths(it.expiry, it.cycle === "年繳" ? 12 : 1); it.dateSource = "週期推算"; it.updatedAt = new Date().toISOString();
+      await saveState(); closeSheet(); render(); toast("已續訂，下一期 " + prettyDate(it.expiry));
+    } }, "已續訂（推算下一期）");
+    actions = h("div", { class: "btn-row" }, renew, h("button", { class: "btn ghost", onclick: () => close("cancelled", "已標記為取消訂閱") }, "已取消訂閱"));
+  }
+  const del = armedDelete(async () => { state.items = state.items.filter(i => i.id !== id); await saveState(); closeSheet(); render(); toast("已刪除"); });
+  openSheet(it.kind === "item" ? "編輯物品" : "編輯訂閱", [ed, h("div", { class: "btn-row" }, save, cal), actions, del]);
+}
+function armedDelete(fn, label = "刪除此筆") {
+  let armed = false, t;
+  const b = h("button", { class: "btn danger block", onclick: () => {
+    if (!armed) { armed = true; b.classList.add("armed"); b.textContent = "再按一次確認刪除"; t = setTimeout(() => { armed = false; b.classList.remove("armed"); b.textContent = label; }, 3500); return; }
+    clearTimeout(t); fn();
+  } }, label);
+  return b;
+}
+function toastWithCal(it) { toast(`已新增「${it.name}」，可在項目內加入行事曆`); }
+
+/* ============ 紀錄 ============ */
+function renderHistory(v) {
+  const closed = state.items.filter(i => i.status !== "active").sort((a, b) => (b.closedAt || "").localeCompare(a.closedAt || ""));
+  const ym = today().slice(0, 7);
+  const thisMonth = closed.filter(i => (i.closedAt || "").startsWith(ym));
+  const c = s => thisMonth.filter(i => i.status === s).length;
+  v.append(h("div", { class: "sec-title" }, h("h2", { text: "本月統計" }), h("span", { class: "hint num", text: ym.replace("-", " 年 ") + " 月" })));
+  const tile = (k, n, cls) => h("div", { class: "stat " + cls }, h("span", { class: "k", text: k }), h("span", { class: "v num", text: n }));
+  v.append(h("div", { class: "hist-stats" }, tile("已用完", c("used"), "all"), tile("已丟棄", c("discarded"), "expired"), tile("已取消訂閱", c("cancelled"), "week")));
+  const disc = closed.filter(i => i.status === "discarded");
+  if (disc.length) {
+    const byCat = {}; disc.forEach(i => byCat[i.category] = (byCat[i.category] || 0) + 1);
+    const top = Object.entries(byCat).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => `${k} ${n} 次`).join("、");
+    v.append(h("div", { class: "note", style: "margin-top:10px" }, h("b", null, "最常丟棄："), top));
+  }
+  v.append(h("div", { class: "sec-title" }, h("h2", { text: "歷史紀錄" }), h("span", { class: "hint num", text: `共 ${closed.length} 筆` })));
+  if (!closed.length) { v.append(h("div", { class: "note", text: "標記為「已用完」「已丟棄」或「已取消訂閱」的項目會出現在這裡。" })); return; }
+  v.append(h("div", { class: "list" }, closed.slice(0, 300).map(i => h("div", { class: "hrow" },
+    h("div", { style: "min-width:0" }, h("div", { class: "name", text: i.name }),
+      h("div", { class: "meta num", text: `${STATUS_LABEL[i.status]}・${i.closedAt ? shortDate(i.closedAt) : ""}・${i.category}${i.expiry ? "・原到期 " + shortDate(i.expiry) : ""}` })),
+    h("button", { class: "btn ghost sm", onclick: async () => { i.status = "active"; i.closedAt = ""; await saveState(); render(); toast("已移回追蹤中"); } }, "移回")))));
+}
+
+/* ============ 設定 ============ */
+function renderSettings(v) {
+  const s = state.settings;
+  // 提醒時間
+  v.append(h("div", { class: "sec-title" }, h("h2", { text: "提醒時間" })));
+  const ah = selectEl(Array.from({ length: 17 }, (_, i) => `${pad(i + 6)}:00`), `${pad(s.alarmHour)}:00`); ah.id = "set-ah";
+  ah.addEventListener("change", async () => { s.alarmHour = parseInt(ah.value, 10); await saveState(); toast("提醒時間已儲存"); });
+  v.append(h("div", { class: "card" }, h("div", { class: "form" }, field("行事曆提醒時間", ah, { full: true })),
+    h("div", { class: "help", style: "font-size:15px;color:var(--ink-2)" }, "加入行事曆時會設兩次提醒：依類別提前 N 天，以及到期當天。")));
+
+  // 規則
+  const numCell = (r, k, label, onSave) => {
+    const inp = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", value: r[k], "aria-label": label });
+    inp.addEventListener("change", async () => { r[k] = Math.max(0, parseInt(inp.value, 10) || 0); inp.value = r[k]; await saveState(); if (onSave) onSave(); });
+    return h("td", null, inp);
+  };
+  v.append(h("div", { class: "sec-title" }, h("h2", { text: "物品保存與提醒規則" }), h("span", { class: "hint", text: "單位：天" })));
+  v.append(h("div", { class: "note" }, "新增物品時，會依「類別＋存放位置」推算到期日（包裝有標示日期時以標示為準），並依類別帶入提前提醒天數。0＝不適合此存放方式，需依包裝填寫。"));
+  const tbody = h("tbody");
+  for (const [g, cats] of ITEM_GROUPS) {
+    tbody.append(h("tr", { class: "grp" }, h("td", { colspan: "5", text: g })));
+    for (const cat of cats) {
+      const r = s.rules.find(x => x.cat === cat); if (!r) continue;
+      tbody.append(h("tr", null, h("td", { text: r.cat }), numCell(r, "fridge", `${r.cat}冷藏天數`), numCell(r, "freezer", `${r.cat}冷凍天數`), numCell(r, "room", `${r.cat}常溫天數`), numCell(r, "remind", `${r.cat}提前提醒天數`)));
+    }
+  }
+  v.append(h("div", { class: "tbl-wrap", style: "margin-top:10px" }, h("table", { class: "rules num" }, h("thead", null, h("tr", null, h("th", { text: "類別" }), h("th", { text: "冷藏" }), h("th", { text: "冷凍" }), h("th", { text: "常溫" }), h("th", { class: "rm", text: "提前提醒" }))), tbody)));
+
+  v.append(h("div", { class: "sec-title" }, h("h2", { text: "訂閱提醒規則" }), h("span", { class: "hint", text: "單位：天" })));
+  const sbody = h("tbody");
+  s.subRules.forEach(r => sbody.append(h("tr", null, h("td", { text: r.cat }), numCell(r, "remind", `${r.cat}提前提醒天數`))));
+  v.append(h("div", { class: "tbl-wrap" }, h("table", { class: "rules sub-rules num" }, h("thead", null, h("tr", null, h("th", { text: "類別" }), h("th", { class: "rm", text: "提前提醒" }))), sbody)));
+  v.append(h("div", { class: "note", style: "margin-top:10px" }, "修改規則只影響之後新增的項目；已建立的項目可在該項目內個別調整。"));
+  v.append(h("div", { class: "btn-row", style: "margin-top:10px" }, h("button", { class: "linkbtn", onclick: async () => { s.rules = structuredClone(DEFAULT_RULES); s.subRules = structuredClone(DEFAULT_SUB_RULES); await saveState(); render(); toast("已恢復預設規則"); } }, "恢復預設規則")));
+
+  // AI
+  v.append(h("div", { class: "sec-title" }, h("h2", { text: "拍照辨識（選用）" }), h("span", { class: "hint", text: s.ai.key ? "已啟用" : "未啟用" })));
+  const key = h("input", { type: "password", id: "set-key", autocomplete: "off", value: s.ai.key, placeholder: "貼上 Gemini API 金鑰" });
+  const model = h("select", { id: "set-model" }, h("option", { value: s.ai.model, text: s.ai.model }));
+  const aiStatus = h("div", { class: "help" });
+  key.addEventListener("change", async () => { s.ai.key = key.value.trim(); await saveState(); aiStatus.className = "help"; aiStatus.textContent = s.ai.key ? "金鑰已儲存，建議按「測試連線」確認" : "已移除金鑰"; });
+  model.addEventListener("change", async () => { s.ai.model = model.value; await saveState(); toast("已切換模型"); });
+  const test = h("button", { class: "btn ghost sm", onclick: async () => {
+    if (!s.ai.key) return toast("請先貼上金鑰");
+    aiStatus.className = "help"; aiStatus.textContent = "連線中…";
+    try {
+      const list = await geminiModels();
+      if (!list.length) throw { friendly: "此金鑰沒有可用的 Flash 模型" };
+      const opts = ["gemini-flash-latest", ...list.filter(n => n !== "gemini-flash-latest")];
+      model.replaceChildren(...opts.map(n => h("option", { value: n, text: n })));
+      model.value = opts.includes(s.ai.model) ? s.ai.model : opts[0]; s.ai.model = model.value; await saveState();
+      aiStatus.className = "help ok"; aiStatus.textContent = `連線成功，共 ${list.length} 個可用模型`;
+    } catch (e) { aiStatus.className = "help bad"; aiStatus.textContent = e.friendly || "連線失敗"; }
+  } }, "測試連線並取得可用模型");
+  v.append(h("div", { class: "card" },
+    h("div", { class: "note" }, "填入免費的 Google Gemini 金鑰後，「新增」會出現「拍照辨識」。金鑰只存在這支手機，不會上傳，也不會包含在備份檔中。"),
+    h("ol", { class: "steps" },
+      h("li", null, h("span", { class: "badge", text: "01" }), h("span", null, "用 Google 帳號登入 ", h("a", { href: "https://aistudio.google.com/apikey", target: "_blank", rel: "noopener", text: "Google AI Studio" }), "。")),
+      h("li", null, h("span", { class: "badge", text: "02" }), h("span", null, "按「Create API key」建立金鑰並複製。")),
+      h("li", null, h("span", { class: "badge", text: "03" }), h("span", null, "貼到下方欄位，按「測試連線」。"))),
+    h("div", { class: "form" }, field("API 金鑰", key, { full: true, help: aiStatus }), field("模型", model, { full: true })),
+    h("div", { class: "btn-row" }, test)));
+
+  // 備份
+  v.append(h("div", { class: "sec-title" }, h("h2", { text: "資料備份" })));
+  const file = h("input", { type: "file", accept: ".json,application/json", hidden: true });
+  file.addEventListener("change", async () => {
+    const f = file.files[0]; file.value = ""; if (!f) return;
+    try {
+      const data = JSON.parse(await f.text());
+      if (!Array.isArray(data.items)) throw 0;
+      const map = new Map(state.items.map(i => [i.id, i]));
+      let n = 0; for (const it of data.items) { if (it && it.id && it.name) { map.set(it.id, it); n++; } }
+      state.items = [...map.values()];
+      if (data.settings) { const k = state.settings.ai; state.settings = mergeSettings(data.settings); state.settings.ai = k; }
+      await saveState(); render(); toast(`已匯入 ${n} 筆資料`);
+    } catch (e) { toast("檔案格式不正確，請選擇效期管家匯出的備份檔"); }
+  });
+  v.append(h("div", { class: "card" },
+    h("div", { class: "note" }, "資料只存在這支手機。建議每月匯出一次備份存到「檔案」或雲端硬碟；換手機時用「匯入備份」還原。"),
+    h("div", { class: "btn-row" },
+      h("button", { class: "btn ghost", onclick: exportBackup }, "匯出備份"),
+      h("button", { class: "btn ghost", onclick: () => file.click() }, "匯入備份")), file,
+    h("div", { class: "help", style: "font-size:15px;color:var(--ink-2)", text: `儲存方式：${storageMode === "idb" ? "裝置資料庫" : storageMode === "local" ? "瀏覽器儲存" : "暫存（不會保留）"}・版本 ${APP_VERSION}` })));
+  const hasEx = state.items.some(i => i.note === "範例資料");
+  v.append(h("div", { style: "display:grid;gap:10px;margin-top:16px" },
+    hasEx ? armedDelete(async () => { state.items = state.items.filter(i => i.note !== "範例資料"); await saveState(); render(); toast("已清除範例資料"); }, "清除範例資料") : null,
+    armedDelete(async () => { state.items = []; await saveState(); render(); toast("已清除全部資料"); }, "清除全部資料")));
+}
+
+/* ============ 檔案輸出（行事曆／備份） ============ */
+async function deliverFile(name, text, mime) {
+  const blob = new Blob([text], { type: mime });
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (mime === "text/calendar" && isIOS) {
+    // iOS：以 Safari 開啟 .ics 會直接出現「加入行事曆」畫面
+    const url = URL.createObjectURL(blob);
+    const a = h("a", { href: url, download: name }); document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000); return;
+  }
+  const f = new File([blob], name, { type: mime });
+  if (isIOS && navigator.canShare && navigator.canShare({ files: [f] })) {
+    try { await navigator.share({ files: [f], title: name }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = h("a", { href: url, download: name }); document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+function icsEscape(s) { return String(s || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/([,;])/g, "\\$1"); }
+function icsFold(line) {
+  const out = []; let cur = ""; let bytes = 0; const enc = new TextEncoder();
+  for (const ch of line) { const b = enc.encode(ch).length; if (bytes + b > 73) { out.push(cur); cur = " " + ch; bytes = 1 + b; } else { cur += ch; bytes += b; } }
+  out.push(cur); return out.join("\r\n");
+}
+function buildICS(items, hour = state.settings.alarmHour) {
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+  const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//ExpiryKeeper//效期管家//ZH-TW", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"];
+  for (const it of items) {
+    if (!isISO(it.expiry)) continue;
+    const d = it.expiry.replace(/-/g, ""), d2 = addDays(it.expiry, 1).replace(/-/g, "");
+    const label = it.kind === "sub" ? (it.autoRenew ? "續訂" : "到期") : "到期";
+    const desc = it.kind === "sub"
+      ? `${it.plan ? it.plan + "・" : ""}${it.amount ? money(it.amount) + "／" + it.cycle + "・" : ""}${it.autoRenew ? "自動續訂" : "手動續訂"}${it.note ? "\n" + it.note : ""}`
+      : `${it.location}・${it.category}${it.qty ? "・" + it.qty + (it.unit || "") : ""}${it.note ? "\n" + it.note : ""}`;
+    L.push("BEGIN:VEVENT", `UID:${it.id}@expiry-keeper`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${d}`, `DTEND;VALUE=DATE:${d2}`,
+      `SUMMARY:${icsEscape(`【${label}】${it.name}`)}`, `DESCRIPTION:${icsEscape(desc + "\n（效期管家）")}`, "TRANSP:TRANSPARENT");
+    const n = Math.max(0, parseInt(it.remindDays, 10) || 0);
+    const trig = (daysBefore) => { const hrs = daysBefore * 24 - hour; return hrs > 0 ? `TRIGGER:-PT${hrs}H` : `TRIGGER:PT${-hrs}H`; };
+    if (n > 0) L.push("BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${icsEscape(`${it.name} 將在 ${n} 天後${label}`)}`, trig(n), "END:VALARM");
+    L.push("BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${icsEscape(`${it.name} 今天${label}`)}`, trig(0), "END:VALARM");
+    L.push("END:VEVENT");
+  }
+  L.push("END:VCALENDAR");
+  return L.map(icsFold).join("\r\n") + "\r\n";
+}
+function exportICS(items, name) { deliverFile(name, buildICS(items), "text/calendar"); }
+function exportBackup() {
+  const data = { app: "expiry-keeper", version: 1, exportedAt: new Date().toISOString(), items: state.items, settings: { ...state.settings, ai: { key: "", model: state.settings.ai.model } } };
+  deliverFile(`效期管家備份-${today()}.json`, JSON.stringify(data, null, 2), "application/json");
+}
+
+/* ============ 啟動 ============ */
+(async function boot() {
+  const saved = await loadState();
+  if (saved && Array.isArray(saved.items)) {
+    state.items = saved.items.map(i => LEGACY_CATS[i.category] ? { ...i, category: LEGACY_CATS[i.category] } : i);
+    state.settings = mergeSettings(saved.settings);
+  }
+  if (window.__PREVIEW__ && !state.items.length) await loadExamples();
+  render();
+  try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch (e) {}
+  if ("serviceWorker" in navigator && location.protocol === "https:" && !window.__PREVIEW__) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+  // 跨日自動更新
+  let lastDay = today();
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && today() !== lastDay) { lastDay = today(); render(); } });
+})();
+</script>
+<!--BODY-END-->
+</body>
+</html>
