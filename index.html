@@ -159,7 +159,7 @@ button{cursor:pointer}
 .panel{background:var(--bg);width:100%;max-width:680px;max-height:94dvh;border-radius:18px 18px 0 0;display:flex;flex-direction:column;overflow:hidden}
 .panel-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px 12px;border-bottom:1px solid var(--line);background:var(--surface)}
 .panel-h h3{margin:0;font-size:20px;color:var(--primary)}
-.panel-b{overflow-y:auto;padding:16px 16px calc(24px + env(safe-area-inset-bottom,0px));display:grid;gap:14px;-webkit-overflow-scrolling:touch}
+.panel-b{overflow-y:auto;padding:16px 16px calc(24px + env(safe-area-inset-bottom,0px));display:grid;gap:14px;grid-auto-rows:max-content;align-content:start;min-height:0;-webkit-overflow-scrolling:touch}
 .x{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;color:var(--ink-2)}
 @media (min-width:700px){.sheet{align-items:center}.panel{border-radius:18px;max-height:88dvh}}
 
@@ -297,7 +297,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <script>
 "use strict";
 /* ============ 常數與預設 ============ */
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.4.1";
 const LOCS = ["冷藏","冷凍","常溫"];
 const ITEM_GROUPS = [
   ["生鮮食材", ["葉菜類","根莖瓜果","水果","肉類","海鮮","蛋","豆製品","乳製品","熟食剩菜","麵包烘焙"]],
