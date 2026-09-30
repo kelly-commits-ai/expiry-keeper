@@ -169,6 +169,19 @@ button{cursor:pointer}
 .date-wrap input[type=text]{flex:1}
 .pick{position:relative;flex:none;width:44px;height:44px;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);display:grid;place-items:center;color:var(--ink-2);overflow:hidden}
 .pick input{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:0;padding:0}
+.scanbtn{flex:none;display:inline-flex;align-items:center;gap:4px;height:44px;padding:0 12px;border:1px solid var(--accent);border-radius:var(--r-sm);background:var(--surface);color:var(--accent);font-size:16px;font-weight:600}
+.scanbtn svg{width:20px;height:20px}
+.overlay{z-index:50}
+.scan-img{width:100%;max-height:240px;object-fit:contain;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--surface-2)}
+.bar{height:6px;border-radius:999px;background:var(--surface-2);overflow:hidden;border:1px solid var(--line)}
+.bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.pick-list{display:grid;gap:8px}
+.cand{display:grid;gap:2px;width:100%;text-align:left;border:1px solid var(--line-strong);background:var(--surface);border-radius:var(--r-sm);padding:10px 12px;font-size:17px}
+.cand small{color:var(--ink-2);font-size:14px}
+.cand.best{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.line-chips{display:flex;flex-wrap:wrap;gap:8px}
+.lchip{border:1px solid var(--line-strong);background:var(--surface);border-radius:10px;padding:8px 12px;font-size:17px;text-align:left;max-width:100%;overflow-wrap:anywhere}
+.lchip[aria-pressed="true"]{background:var(--btn);border-color:var(--btn);color:var(--on-btn)}
 .switch{display:flex;align-items:center;gap:10px;height:44px}
 .switch input{width:22px;height:22px;accent-color:var(--accent)}
 .note{font-size:15.5px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px}
@@ -245,12 +258,13 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 </nav>
 
 <div id="sheet-root"></div>
+<div id="scan-root"></div>
 <div id="toast-root" aria-live="polite"></div>
 
 <script>
 "use strict";
 /* ============ 常數與預設 ============ */
-const APP_VERSION = "1.1.1";
+const APP_VERSION = "1.2.0";
 const LOCS = ["冷藏","冷凍","常溫"];
 const ITEM_GROUPS = [
   ["生鮮食材", ["葉菜類","根莖瓜果","水果","肉類","海鮮","蛋","豆製品","乳製品","熟食剩菜","麵包烘焙"]],
@@ -681,7 +695,7 @@ function selectEl(options, value) {
   s.value = value; return s;
 }
 function dateField(label, value, onChange, opts = {}) {
-  const txt = h("input", { type: "text", id: fid("d"), inputmode: "text", autocomplete: "off", placeholder: opts.placeholder || "可掃描文字，如 115.10.12", value: value || "" });
+  const txt = h("input", { type: "text", id: fid("d"), inputmode: "text", autocomplete: "off", placeholder: opts.placeholder || "例如 115.10.12", value: value || "" });
   const help = h("div", { class: "help" });
   const native = h("input", { type: "date", "aria-label": label + "（月曆選擇）", tabindex: "-1" });
   if (isISO(value)) native.value = value;
@@ -703,7 +717,8 @@ function dateField(label, value, onChange, opts = {}) {
   txt.addEventListener("blur", () => { const r = parseDateText(txt.value); if (r) txt.value = r.date; });
   native.addEventListener("change", () => { if (native.value) { txt.value = native.value; commit(true); } });
   show(isISO(value) ? { date: value, how: "" } : null);
-  const wrap = h("div", { class: "f" + (opts.full ? " full" : "") }, h("label", { for: txt.id, text: label }), h("div", { class: "date-wrap" }, txt, pick), help);
+  const scan = opts.scan ? scanButton("date", label, (val) => { txt.value = val; commit("scan"); }) : null;
+  const wrap = h("div", { class: "f" + (opts.full ? " full" : "") }, h("label", { for: txt.id, text: label }), h("div", { class: "date-wrap" }, txt, scan, pick), help);
   wrap.setValue = (v, how) => { txt.value = v || ""; if (isISO(v)) native.value = v; current = isISO(v) ? v : ""; show(v ? { date: v, how: how || "" } : null); };
   wrap.setEmptyHint = (s) => { opts.emptyHint = s; if (!txt.value.trim()) show(null); };
   return wrap;
@@ -723,9 +738,10 @@ function buildEditor(draft, { removable, onRemove } = {}) {
     card.append(head);
     const form = h("div", { class: "form" }); card.append(form);
 
-    const name = h("input", { type: "text", id: fid("n"), value: d.name, placeholder: d.kind === "item" ? "可掃描包裝上的品名" : "例如 Netflix、Costco 會員", autocomplete: "off" });
+    const name = h("input", { type: "text", id: fid("n"), value: d.name, placeholder: d.kind === "item" ? "輸入或按「掃描」" : "例如 Netflix、Costco 會員", autocomplete: "off" });
     name.addEventListener("input", () => d.name = name.value);
-    form.append(field(d.kind === "item" ? "品名" : "服務名稱", name, { full: true }));
+    const nameScan = scanButton("text", d.kind === "item" ? "品名" : "服務名稱", (val) => { name.value = val; d.name = val; });
+    form.append(h("div", { class: "f full" }, h("label", { for: name.id, text: d.kind === "item" ? "品名" : "服務名稱" }), h("div", { class: "date-wrap" }, name, nameScan)));
     const remind = h("input", { type: "number", inputmode: "numeric", min: "0", step: "1", id: fid("rm"), value: d.remindDays });
     remind.addEventListener("input", () => { d.remindDays = remind.value; remindTouched = true; });
     const syncRemind = () => { if (!remindTouched) { d.remindDays = catRemind(d.kind, d.category); remind.value = d.remindDays; } };
@@ -739,7 +755,7 @@ function buildEditor(draft, { removable, onRemove } = {}) {
       const unit = h("input", { type: "text", id: fid("u"), value: d.unit, placeholder: "盒、包、顆…" });
       const src = selectEl(SOURCES.filter(s => s !== "週期推算"), d.dateSource);
       const pd = dateField("購買日", d.purchaseDate, (v) => { if (v) { d.purchaseDate = v; recompute(); } }, { placeholder: "YYYY-MM-DD", full: true });
-      const ex = dateField("到期日", d.expiry, (v, user) => { d.expiry = v; if (user) { d.dateSource = "手動輸入"; src.value = d.dateSource; } updateRuleHint(); }, { full: true });
+      const ex = dateField("到期日", d.expiry, (v, user) => { d.expiry = v; if (user) { d.dateSource = user === "scan" ? "標示日期" : "手動輸入"; src.value = d.dateSource; } updateRuleHint(); }, { full: true, scan: true });
       function updateRuleHint() {
         const n = ruleDays(d.category, d.location);
         ex.setEmptyHint(n > 0 ? `依規則：${d.category}${d.location} ${n} 天` : `${d.category}${d.location}沒有預設天數，請依包裝填寫`);
@@ -770,7 +786,7 @@ function buildEditor(draft, { removable, onRemove } = {}) {
       const auto = h("input", { type: "checkbox", id: fid("r"), checked: d.autoRenew });
       const pay = h("input", { type: "text", id: fid("pm"), value: d.payMethod, placeholder: "例如 信用卡、Apple 帳號（勿填卡號）" });
       const src = selectEl(SOURCES.filter(s => s !== "規則推算"), d.dateSource);
-      const ex = dateField(d.autoRenew ? "下次續訂／扣款日" : "到期日", d.expiry, (v, user) => { d.expiry = v; if (user) { d.dateSource = "手動輸入"; src.value = d.dateSource; } }, { full: true });
+      const ex = dateField(d.autoRenew ? "下次續訂／扣款日" : "到期日", d.expiry, (v, user) => { d.expiry = v; if (user) { d.dateSource = user === "scan" ? "標示日期" : "手動輸入"; src.value = d.dateSource; } }, { full: true, scan: true });
       cat.addEventListener("change", () => { d.category = cat.value; syncRemind(); });
       plan.addEventListener("input", () => d.plan = plan.value);
       amount.addEventListener("input", () => d.amount = amount.value);
@@ -817,7 +833,7 @@ function closeSheet() {
   $("#sheet-root").replaceChildren(); document.body.style.overflow = "";
   if (lastFocus && lastFocus.focus) lastFocus.focus();
 }
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("#sheet-root").firstChild) closeSheet(); });
+document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; if ($("#scan-root").firstChild) closeScan(); else if ($("#sheet-root").firstChild) closeSheet(); });
 
 /* ============ 新增 ============ */
 function openAddSheet() {
@@ -840,7 +856,7 @@ function openAddSheet() {
 }
 function manualMode(host) {
   const ed = buildEditor(blankDraft("item"));
-  const tip = h("div", { class: "note" }, h("b", null, "小技巧："), "點品名或到期日欄位，在鍵盤上方或長按選單選「掃描文字」，把鏡頭對準包裝文字即可帶入。");
+  const tip = h("div", { class: "note" }, h("b", null, "小技巧："), "按欄位右側的「掃描」，拍下包裝上的品名或日期，即可點選帶入。拍攝時請靠近文字、避免反光。");
   const save = h("button", { class: "btn block", onclick: async () => {
     const err = ed.validate(); if (err) return toast(err);
     const it = finalizeItem(ed.getDraft()); state.items.push(it); await saveState();
@@ -924,6 +940,124 @@ function photoMode(host) {
       h("button", { class: "btn ghost", onclick: () => libIn.click() }, "從相簿選擇")),
     camIn, libIn, thumbs, status, runBtn, out,
     h("div", { class: "note" }, "照片會縮小後送到 Google Gemini 辨識，不會存在本 App。訂閱截圖請先裁掉 Email、帳號等個人資訊。"));
+}
+
+/* ============ 掃描（相機文字辨識） ============ */
+const OCR_LIB = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+let ocrWorkerP = null, ocrProgress = null;
+function loadScript(src) {
+  return new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = src; sc.onload = res; sc.onerror = () => rej(new Error("load")); document.head.append(sc); });
+}
+function getOcrWorker() {
+  if (!ocrWorkerP) ocrWorkerP = (async () => {
+    if (!window.Tesseract) await loadScript(window.__OCR_LIB__ || OCR_LIB);
+    const opts = Object.assign({ logger: (m) => ocrProgress && ocrProgress(m) }, window.__OCR_OPTS__ || {});
+    return Tesseract.createWorker(["chi_tra", "eng"], 1, opts);
+  })().catch(e => { ocrWorkerP = null; throw { friendly: "無法載入辨識資料，請確認網路連線後再試一次" }; });
+  return ocrWorkerP;
+}
+function prepCanvas(file, maxSide = 1800) {
+  return new Promise((res, rej) => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      const g = c.getContext("2d"); g.drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); res(c);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej({ friendly: "無法讀取這張照片" }); };
+    img.src = url;
+  });
+}
+function cleanLine(t) {
+  return t.replace(/(?<=[㐀-鿿＀-￯])\s+(?=[㐀-鿿＀-￯])/g, "").replace(/\s{2,}/g, " ").trim();
+}
+async function ocrLines(file, onStatus) {
+  if (state.settings.ai.key) {
+    onStatus("以 Gemini 辨識文字中…", null);
+    const b64 = await fileToJpegBase64(file);
+    const model = state.settings.ai.model || "gemini-flash-latest";
+    const j = await geminiCall(`models/${encodeURIComponent(model)}:generateContent`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "請逐行抄錄圖片中所有看得到的文字（繁體中文照原樣，保留數字與符號），輸出 JSON 字串陣列，每一行一個元素，不要其他說明。" }, { inline_data: { mime_type: "image/jpeg", data: b64 } }] }], generationConfig: { temperature: 0, responseMimeType: "application/json" } })
+    });
+    const text = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
+    let arr = null; try { arr = JSON.parse(text); } catch (e) { arr = extractJSON(text); }
+    return (Array.isArray(arr) ? arr : String(text).split("\n")).map(x => cleanLine(String(x))).filter(Boolean);
+  }
+  ocrProgress = (m) => {
+    if (m.status === "recognizing text") onStatus("辨識文字中…", m.progress);
+    else if (/load|initializ/i.test(m.status)) onStatus("首次使用正在下載辨識資料（約 8 MB，只需一次）…", m.progress);
+  };
+  onStatus("準備辨識…", null);
+  const worker = await getOcrWorker();
+  const canvas = await prepCanvas(file);
+  const { data } = await worker.recognize(canvas);
+  ocrProgress = null;
+  return String(data.text || "").split("\n").map(cleanLine).filter(t => t.length >= 1);
+}
+function findDates(text) {
+  const s = toHalf(String(text)).replace(/[ \t]+/g, "");
+  const re = /\d{1,4}[.\/\-年]\d{1,2}[.\/\-月]\d{1,4}日?|\d{3,4}[.\/\-年]\d{1,2}月?|\d{1,2}[.\/\-]\d{4}|\d{6,8}/g;
+  const out = []; const seen = new Set(); let m;
+  while ((m = re.exec(s))) { const p = parseToken(m[0]); if (p && !seen.has(p.date)) { seen.add(p.date); out.push({ ...p, raw: m[0] }); } }
+  const best = parseDateText(text);
+  if (best) { out.sort((a, b) => (b.date === best.date) - (a.date === best.date)); }
+  return out;
+}
+function scanButton(mode, label, apply) {
+  const inp = h("input", { type: "file", accept: "image/*", capture: "environment", hidden: true });
+  inp.addEventListener("change", () => { const f = inp.files[0]; inp.value = ""; if (f) openScan(mode, label, f, apply, () => inp.click()); });
+  const b = h("button", { type: "button", class: "scanbtn", "aria-label": "掃描" + label, onclick: () => inp.click() }, h("span", { svg: ICON.cam }), "掃描");
+  return h("span", { style: "display:contents" }, b, inp);
+}
+function closeScan() { $("#scan-root").replaceChildren(); }
+function openScan(mode, label, file, apply, retake) {
+  const img = h("img", { class: "scan-img", alt: "拍攝的照片" }); img.src = URL.createObjectURL(file);
+  const status = h("div", { class: "status" }, h("span", { class: "spin" }), "準備辨識…");
+  const bar = h("div", { class: "bar", hidden: true }, h("i"));
+  const results = h("div", { style: "display:grid;gap:14px" });
+  const body = h("div", { class: "panel-b" }, img, status, bar, results,
+    h("div", { class: "btn-row" }, h("button", { class: "btn ghost", onclick: () => { closeScan(); retake(); } }, h("span", { svg: ICON.cam }), "重拍"), h("button", { class: "btn ghost", onclick: closeScan }, "取消")));
+  const sheet = h("div", { class: "sheet overlay", role: "dialog", "aria-modal": "true", "aria-label": "掃描" + label },
+    h("div", { class: "panel" }, h("div", { class: "panel-h" }, h("h3", { text: "掃描" + label }), h("button", { class: "x", "aria-label": "關閉", svg: ICON.close, onclick: closeScan })), body));
+  $("#scan-root").replaceChildren(sheet);
+  const setStatus = (t, p) => {
+    status.replaceChildren(h("span", { class: "spin" }), t);
+    if (p == null) bar.hidden = true; else { bar.hidden = false; bar.firstChild.style.width = Math.round(p * 100) + "%"; }
+  };
+  ocrLines(file, setStatus).then(lines => {
+    if (!document.body.contains(sheet)) return;
+    bar.hidden = true;
+    if (!lines.length) { status.textContent = "沒有辨識到文字。請靠近一點、避免反光後重拍。"; return; }
+    status.textContent = "";
+    if (mode === "date") {
+      const dates = findDates(lines.join("\n"));
+      if (dates.length) {
+        results.append(h("div", { class: "sec-title", style: "margin:0" }, h("h2", { text: "找到的日期" }), h("span", { class: "hint", text: "點選帶入" })),
+          h("div", { class: "pick-list" }, dates.map((d, i) => h("button", { class: "cand" + (i === 0 ? " best" : ""), onclick: () => { apply(d.date); closeScan(); toast("已帶入 " + prettyDate(d.date)); } },
+            h("span", { class: "num", text: prettyDate(d.date) + (i === 0 && dates.length > 1 ? "　最可能是到期日" : "") }), h("small", { text: `原文 ${d.raw}${d.how ? "・" + d.how : ""}` })))));
+      } else {
+        results.append(h("div", { class: "note", text: "照片中沒有找到可辨識的日期格式。可以點下方文字試試，或重拍日期部分。" }));
+      }
+      results.append(h("div", { class: "sec-title", style: "margin:0" }, h("h2", { text: "辨識到的文字" })),
+        h("div", { class: "line-chips" }, lines.map(t => h("button", { class: "lchip", onclick: () => { const r = parseDateText(t); if (r) { apply(r.date); closeScan(); toast("已帶入 " + prettyDate(r.date)); } else toast("這段文字中沒有日期"); } }, t))));
+    } else {
+      const picked = [];
+      const preview = h("input", { type: "text", id: fid("sp"), placeholder: "點選下方文字組合品名，也可直接修改" });
+      const chips = lines.map(t => {
+        const c = h("button", { class: "lchip", "aria-pressed": "false", onclick: () => {
+          const i = picked.indexOf(t);
+          if (i >= 0) { picked.splice(i, 1); c.setAttribute("aria-pressed", "false"); } else { picked.push(t); c.setAttribute("aria-pressed", "true"); }
+          preview.value = picked.join(" ");
+        } }, t);
+        return c;
+      });
+      results.append(h("div", { class: "sec-title", style: "margin:0" }, h("h2", { text: "辨識到的文字" }), h("span", { class: "hint", text: "可複選，依點選順序組合" })),
+        h("div", { class: "line-chips" }, chips),
+        h("div", { class: "f" }, h("label", { for: preview.id, text: label }), preview),
+        h("button", { class: "btn block", onclick: () => { const v = preview.value.trim(); if (!v) return toast("請先點選文字"); apply(v); closeScan(); toast("已帶入" + label); } }, "帶入" + label));
+    }
+  }).catch(e => { if (document.body.contains(sheet)) { bar.hidden = true; status.textContent = e.friendly || "辨識失敗，請重拍一次"; } });
 }
 
 /* ============ Gemini ============ */
