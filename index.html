@@ -247,6 +247,11 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 .cp-row .main{display:grid;gap:2px;min-width:0}
 .cp-row .name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cp-row .meta{font-size:15px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.lock{position:fixed;inset:0;z-index:80;background:var(--bg);display:grid;place-items:center;padding:24px 16px calc(24px + env(safe-area-inset-bottom,0px))}
+.lock-card{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:28px 22px;display:grid;gap:12px}
+.lock-card .capsule{justify-self:start}
+.lock-title{margin:0;font-size:30px;color:var(--primary);letter-spacing:.04em}
+.lock-sub{margin:0;color:var(--ink-2);font-size:16px}
 .banner{background:var(--warn-bg);color:var(--warn);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;font-size:16px;margin-top:12px}
 </style>
 <!--STYLE-END-->
@@ -1541,6 +1546,37 @@ function exportBackup() {
   deliverFile(`效期管家備份-${today()}.json`, JSON.stringify(data, null, 2), "application/json");
 }
 
+/* ============ 共用密碼 ============ */
+// 程式碼只存密碼的 SHA-256 雜湊值（不存原文）；空字串＝不啟用密碼
+const PASS_HASH = "";
+async function sha256(t) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+function showLock() {
+  return new Promise(resolve => {
+    const input = h("input", { type: "password", id: "lock-pw", autocomplete: "current-password", placeholder: "輸入共用密碼" });
+    const msg = h("div", { class: "help", style: "min-height:22px" });
+    const btn = h("button", { class: "btn block", type: "submit" }, "解鎖");
+    const form = h("form", { class: "lock-card" },
+      h("span", { class: "capsule" }, "效期・訂閱管理"),
+      h("h1", { class: "lock-title", text: "效期管家" }),
+      h("p", { class: "lock-sub", text: "請輸入共用密碼。每支手機只需輸入一次。" }),
+      h("div", { class: "f" }, h("label", { for: "lock-pw", text: "共用密碼" }), input), msg, btn);
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault(); btn.disabled = true;
+      const v = input.value.trim();
+      const ok = v && (await sha256(v)) === PASS_HASH;
+      if (!ok) { msg.className = "help bad"; msg.textContent = "密碼不正確，請再試一次"; btn.disabled = false; input.select(); return; }
+      state.unlockedHash = PASS_HASH; await saveState();
+      lock.remove(); document.body.style.overflow = ""; resolve();
+    });
+    const lock = h("div", { class: "lock" }, form);
+    document.body.append(lock); document.body.style.overflow = "hidden";
+    setTimeout(() => input.focus(), 50);
+  });
+}
+
 /* ============ 啟動 ============ */
 (async function boot() {
   const saved = await loadState();
@@ -1548,8 +1584,10 @@ function exportBackup() {
     state.items = saved.items.map(i => LEGACY_CATS[i.category] ? { ...i, category: LEGACY_CATS[i.category] } : i);
     state.settings = mergeSettings(saved.settings);
   }
+  if (saved && saved.unlockedHash) state.unlockedHash = saved.unlockedHash;
   applyPalette(state.settings.palette);
   if (window.__PREVIEW__ && !state.items.length) await loadExamples();
+  if (PASS_HASH && state.unlockedHash !== PASS_HASH) await showLock();
   render();
   try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch (e) {}
   if ("serviceWorker" in navigator && location.protocol === "https:" && !window.__PREVIEW__) {
