@@ -269,7 +269,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <script>
 "use strict";
 /* ============ 常數與預設 ============ */
-const APP_VERSION = "1.2.4";
+const APP_VERSION = "1.2.5";
 const LOCS = ["冷藏","冷凍","常溫"];
 const ITEM_GROUPS = [
   ["生鮮食材", ["葉菜類","根莖瓜果","水果","肉類","海鮮","蛋","豆製品","乳製品","熟食剩菜","麵包烘焙"]],
@@ -931,7 +931,7 @@ function photoMode(host) {
   const runBtn = h("button", { class: "btn block", disabled: true, onclick: async () => {
     runBtn.disabled = true; status.replaceChildren(h("span", { class: "spin" }), "辨識中，約需 5–20 秒…");
     try {
-      const arr = await geminiRecognize(files);
+      const arr = await geminiRecognize(files, (t) => status.replaceChildren(h("span", { class: "spin" }), t));
       if (!arr || !arr.length) throw { friendly: "沒有辨識到品項，請換個角度或光線再拍一次" };
       status.textContent = ""; out.replaceChildren(); reviewList(out, arr.map(fromAI));
       runBtn.hidden = true;
@@ -1026,11 +1026,7 @@ async function ocrRegion(img, r, mode, onStatus) {
     onStatus("以 Gemini 辨識中…", null);
     const c = prepCanvas(img, r, { color: true, max: 1600 });
     const b64 = c.toDataURL("image/jpeg", 0.9).split(",")[1];
-    const model = state.settings.ai.model || "gemini-flash-latest";
-    const j = await geminiCall(`models/${encodeURIComponent(model)}:generateContent`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "請逐行抄錄圖片中所有看得到的文字（繁體中文照原樣，保留數字與符號；點陣噴印的日期也要讀出），輸出 JSON 字串陣列，每一行一個元素，不要其他說明。" }, { inline_data: { mime_type: "image/jpeg", data: b64 } }] }], generationConfig: { temperature: 0, responseMimeType: "application/json" } })
-    });
+    const j = await geminiGenerate({ contents: [{ role: "user", parts: [{ text: "請逐行抄錄圖片中所有看得到的文字（繁體中文照原樣，保留數字與符號；點陣噴印的日期也要讀出），輸出 JSON 字串陣列，每一行一個元素，不要其他說明。" }, { inline_data: { mime_type: "image/jpeg", data: b64 } }] }], generationConfig: { temperature: 0, responseMimeType: "application/json" } }, onStatus);
     const text = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
     let arr = null; try { arr = JSON.parse(text); } catch (e) { arr = extractJSON(text); }
     const lines = (Array.isArray(arr) ? arr : String(text).split("\n")).map(x => cleanLine(String(x))).filter(Boolean);
@@ -1177,19 +1173,34 @@ async function geminiCall(path, init) {
     if (res.status === 400 && /API key/i.test(msg)) throw { friendly: "金鑰無效，請到設定重新貼上金鑰" };
     if (res.status === 403) throw { friendly: "金鑰沒有權限，請確認已在 Google AI Studio 建立金鑰" };
     if (res.status === 404) throw { friendly: "找不到這個模型，請到設定按「取得可用模型」重新選擇" };
-    if (res.status === 429) throw { friendly: "今天的免費額度已用完或太頻繁，請稍後再試" };
-    throw { friendly: `辨識服務回應錯誤（${res.status}）${msg ? "：" + msg.slice(0, 80) : ""}` };
+    if (res.status === 429) throw { status: 429, friendly: "今天的免費額度已用完或使用太頻繁，請稍後再試" };
+    if (res.status >= 500) throw { status: res.status, friendly: "Google 辨識服務目前忙碌，請稍等一下再試" };
+    throw { status: res.status, friendly: `辨識服務回應錯誤（${res.status}）` };
   }
   return res.json();
 }
-async function geminiRecognize(files) {
+// 呼叫 Gemini 產生內容：忙碌（5xx）或限流（429）時自動重試，再改用備援模型
+const GEMINI_FALLBACK = "gemini-flash-lite-latest";
+async function geminiGenerate(body, onStatus) {
+  const primary = state.settings.ai.model || "gemini-flash-latest";
+  const tries = [[primary, 0], [primary, 2000], ...(primary !== GEMINI_FALLBACK ? [[GEMINI_FALLBACK, 500]] : [])];
+  let lastErr;
+  for (let i = 0; i < tries.length; i++) {
+    const [model, wait] = tries[i];
+    if (wait) { if (onStatus) onStatus(model === primary ? "辨識服務忙碌，自動重試中…" : "改用備援模型辨識中…", null); await new Promise(r => setTimeout(r, wait)); }
+    try {
+      return await geminiCall(`models/${encodeURIComponent(model)}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    } catch (e) {
+      lastErr = e;
+      if (!(e.status >= 500 || e.status === 429)) throw e;
+    }
+  }
+  throw lastErr;
+}
+async function geminiRecognize(files, onStatus) {
   const parts = [{ text: aiPrompt(false) }];
   for (const f of files) parts.push({ inline_data: { mime_type: "image/jpeg", data: await fileToJpegBase64(f) } });
-  const model = state.settings.ai.model || "gemini-flash-latest";
-  const j = await geminiCall(`models/${encodeURIComponent(model)}:generateContent`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } })
-  });
+  const j = await geminiGenerate({ contents: [{ role: "user", parts }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } }, onStatus);
   const text = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
   return extractJSON(text);
 }
