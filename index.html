@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>效期管家</title>
-<meta name="theme-color" content="#0D3B3E">
+<meta name="theme-color" content="#7B3F4E">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="效期管家">
@@ -285,7 +285,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <script>
 "use strict";
 /* ============ 常數與預設 ============ */
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.3.1";
 const LOCS = ["冷藏","冷凍","常溫"];
 const ITEM_GROUPS = [
   ["生鮮食材", ["葉菜類","根莖瓜果","水果","肉類","海鮮","蛋","豆製品","乳製品","熟食剩菜","麵包烘焙"]],
@@ -314,16 +314,16 @@ const DEFAULT_SETTINGS = {
   alarmHour: 9, rulesVersion: RULES_VERSION,
   rules: DEFAULT_RULES, subRules: DEFAULT_SUB_RULES,
   ai: { key: "", model: "gemini-flash-latest" },
-  palette: "teal"
+  palette: "rose"
 };
 const PALETTES = [
   { id: "teal", name: "深藍綠", note: "原版", colors: ["#0D3B3E", "#2E7D7D", "#C9A961", "#FAF8F3"], meta: "#0D3B3E" },
   { id: "coral", name: "珊瑚粉", note: "女版・範本配色", colors: ["#EE8778", "#EBB2AC", "#F9E2E2", "#FFF8F8"], meta: "#EE8778" },
-  { id: "rose", name: "玫瑰霧", note: "乾燥玫瑰", colors: ["#7B3F4E", "#B06A7A", "#C9A961", "#FBF7F6"], meta: "#7B3F4E" },
+  { id: "rose", name: "玫瑰霧", note: "乾燥玫瑰・預設", colors: ["#7B3F4E", "#B06A7A", "#C9A961", "#FBF7F6"], meta: "#7B3F4E" },
   { id: "lavender", name: "薰衣草灰", note: "灰紫", colors: ["#4F4577", "#7D71AE", "#C9A961", "#F9F8FB"], meta: "#4F4577" }
 ];
 function applyPalette(id) {
-  const p = PALETTES.find(x => x.id === id) || PALETTES[0];
+  const p = PALETTES.find(x => x.id === id) || PALETTES.find(x => x.id === DEFAULT_SETTINGS.palette);
   if (p.id === "teal") delete document.documentElement.dataset.palette; else document.documentElement.dataset.palette = p.id;
   const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content", p.meta);
 }
@@ -1352,7 +1352,7 @@ function renderSettings(v) {
   const s = state.settings;
   v.append(h("div", { class: "ver-line num" }, h("span", { class: "tag gold", text: "版本 " + APP_VERSION }), h("span", { text: `資料儲存：${storageMode === "idb" ? "裝置資料庫" : storageMode === "local" ? "瀏覽器儲存" : "暫存（不會保留）"}` })));
   v.append(h("div", { class: "sec-title" }, h("h2", { text: "主題色系" })));
-  v.append(h("div", { class: "pal-grid", role: "group", "aria-label": "主題色系" }, PALETTES.map(p => h("button", { class: "pal", "aria-pressed": String((s.palette || "teal") === p.id), onclick: async () => { s.palette = p.id; applyPalette(p.id); await saveState(); render(); toast("已切換為「" + p.name + "」"); } },
+  v.append(h("div", { class: "pal-grid", role: "group", "aria-label": "主題色系" }, PALETTES.map(p => h("button", { class: "pal", "aria-pressed": String((s.palette || DEFAULT_SETTINGS.palette) === p.id), onclick: async () => { s.palette = p.id; applyPalette(p.id); await saveState(); render(); toast("已切換為「" + p.name + "」"); } },
     h("span", { class: "dots" }, p.colors.map(c => h("i", { style: `background:${c}` }))), h("span", { text: p.name }), h("small", { style: "color:var(--ink-2);font-size:14px;font-weight:400", text: p.note })))));
   // 提醒時間
   v.append(h("div", { class: "sec-title" }, h("h2", { text: "提醒時間" })));
