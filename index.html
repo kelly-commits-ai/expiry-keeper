@@ -285,7 +285,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <script>
 "use strict";
 /* ============ 常數與預設 ============ */
-const APP_VERSION = "1.3.2";
+const APP_VERSION = "1.3.3";
 const LOCS = ["冷藏","冷凍","常溫"];
 const ITEM_GROUPS = [
   ["生鮮食材", ["葉菜類","根莖瓜果","水果","肉類","海鮮","蛋","豆製品","乳製品","熟食剩菜","麵包烘焙"]],
@@ -505,9 +505,9 @@ function mergeSettings(s) {
 
 /* ============ 提示訊息 ============ */
 let toastTimer;
-function toast(msg) {
+function toast(msg, ms = 2600) {
   const root = $("#toast-root"); root.replaceChildren(h("div", { class: "toast", text: msg }));
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => root.replaceChildren(), 2600);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => root.replaceChildren(), ms);
 }
 function renderBanner() {
   const slot = $("#banner-slot"); slot.replaceChildren();
@@ -1392,7 +1392,7 @@ function renderSettings(v) {
   const key = h("input", { type: "password", id: "set-key", autocomplete: "off", value: s.ai.key, placeholder: "貼上 Gemini API 金鑰" });
   const model = h("select", { id: "set-model" }, h("option", { value: s.ai.model, text: s.ai.model }));
   const aiStatus = h("div", { class: "help" });
-  key.addEventListener("change", async () => { s.ai.key = key.value.trim(); await saveState(); aiHint.textContent = s.ai.key ? "已啟用" : "未啟用"; aiStatus.className = "help"; aiStatus.textContent = s.ai.key ? "金鑰已儲存，建議按「測試連線」確認" : "已移除金鑰"; });
+  key.addEventListener("change", async () => { s.ai.key = key.value.trim(); await saveState(); aiHint.textContent = s.ai.key ? "已啟用" : "未啟用"; if (s.ai.key) { ui.keyHint = false; const bn = key.closest(".card").querySelector(".banner"); if (bn) bn.remove(); } aiStatus.className = "help"; aiStatus.textContent = s.ai.key ? "金鑰已儲存，建議按「測試連線」確認" : "已移除金鑰"; });
   model.addEventListener("change", async () => { s.ai.model = model.value; await saveState(); toast("已切換模型"); });
   const test = h("button", { class: "btn ghost sm", onclick: async () => {
     if (!s.ai.key) return toast("請先貼上金鑰");
@@ -1407,6 +1407,7 @@ function renderSettings(v) {
     } catch (e) { aiStatus.className = "help bad"; aiStatus.textContent = e.friendly || "連線失敗"; }
   } }, "測試連線並取得可用模型");
   v.append(h("div", { class: "card" },
+    ui.keyHint && !s.ai.key ? h("div", { class: "banner", style: "margin-top:0" }, h("b", null, "備份不含 Gemini 金鑰。"), "資料已還原；如需拍照辨識與日期掃描，請在下方重新貼上金鑰（可到 Google AI Studio 複製原本那組）。") : null,
     h("div", { class: "note" }, "填入免費的 Google Gemini 金鑰後，「新增」會出現「拍照辨識」。金鑰只存在這支手機，不會上傳，也不會包含在備份檔中。"),
     h("ol", { class: "steps" },
       h("li", null, h("span", { class: "badge", text: "01" }), h("span", null, "用 Google 帳號登入 ", h("a", { href: "https://aistudio.google.com/apikey", target: "_blank", rel: "noopener", text: "Google AI Studio" }), "。")),
@@ -1427,7 +1428,10 @@ function renderSettings(v) {
       let n = 0; for (const it of data.items) { if (it && it.id && it.name) { map.set(it.id, it); n++; } }
       state.items = [...map.values()];
       if (data.settings) { const k = state.settings.ai; state.settings = mergeSettings(data.settings); state.settings.ai = k; applyPalette(state.settings.palette); }
-      await saveState(); render(); toast(`已匯入 ${n} 筆資料`);
+      ui.keyHint = !state.settings.ai.key; // 備份不含金鑰：提醒重新貼上
+      await saveState(); render();
+      if (ui.keyHint) { toast(`已匯入 ${n} 筆資料。備份不含 Gemini 金鑰，請重新貼上`, 5000); const k = document.getElementById("set-key"); if (k) k.closest(".card").scrollIntoView({ behavior: "smooth", block: "center" }); }
+      else toast(`已匯入 ${n} 筆資料`);
     } catch (e) { toast("檔案格式不正確，請選擇效期管家匯出的備份檔"); }
   });
   v.append(h("div", { class: "card" },
