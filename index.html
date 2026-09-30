@@ -269,7 +269,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <script>
 "use strict";
 /* ============ 常數與預設 ============ */
-const APP_VERSION = "1.2.5";
+const APP_VERSION = "1.2.6";
 const LOCS = ["冷藏","冷凍","常溫"];
 const ITEM_GROUPS = [
   ["生鮮食材", ["葉菜類","根莖瓜果","水果","肉類","海鮮","蛋","豆製品","乳製品","熟食剩菜","麵包烘焙"]],
@@ -413,9 +413,13 @@ function urgency(it) {
 function daysLabel(it) {
   if (!it.expiry) return { big: "—", small: "未填日期" };
   const d = diffDays(today(), it.expiry);
-  if (d < 0) return { big: String(-d), small: "天前到期" };
   if (d === 0) return { big: "今", small: "今天到期" };
-  return { big: String(d), small: "天後" };
+  const a = Math.abs(d), past = d < 0;
+  if (a <= 60) return { big: String(a), small: past ? "天前到期" : "天後" };
+  const months = a / 30.44;
+  if (Math.round(months) < 12) return { big: String(Math.round(months)), small: past ? "個月前到期" : "個月後", approx: true };
+  const years = Math.max(1, Math.round(a / 365.25 * 2) / 2); // 取到半年
+  return { big: String(years), small: past ? "年前到期" : "年後", approx: true };
 }
 function monthlyCost(it) {
   if (it.kind !== "sub" || !it.amount) return 0;
@@ -580,7 +584,7 @@ function rowEl(it) {
     meta.push(h("span", { text: it.autoRenew ? "自動續訂" : "手動續訂" }));
   }
   return h("button", { class: "row", onclick: () => openEditSheet(it.id) },
-    h("span", { class: "days u-" + u }, h("b", { class: "num", text: dl.big }), h("small", { text: dl.small })),
+    h("span", { class: "days u-" + u, title: it.expiry ? `距離到期 ${diffDays(today(), it.expiry)} 天` : "" }, h("b", { class: "num", text: dl.big }), h("small", { text: (dl.approx ? "約 " : "") + dl.small })),
     h("span", { class: "main" }, h("div", { class: "name", text: it.name }), h("div", { class: "meta" }, meta)),
     h("span", { class: "date num" }, it.expiry ? shortDate(it.expiry) : "—", h("span", { class: "src", text: it.dateSource || "" })));
 }
@@ -862,15 +866,18 @@ function openAddSheet() {
 function manualMode(host) {
   const ed = buildEditor(blankDraft("item"));
   const tip = h("div", { class: "note" }, h("b", null, "小技巧："), state.settings.ai.key ? "按欄位右側的「掃描」，拍照或從相簿選照片，再用手指框住品名或日期那一行，即可點選帶入。框得越精準、越沒有反光，辨識越準。" : "按品名右側的「掃描」，拍照或從相簿選照片，再用手指框住品名那一行即可帶入。日期可直接輸入簡寫，例如 115.10.12；到設定填入 Gemini 金鑰後，日期也能掃描。");
+  const dupeNote = h("div");
   const save = h("button", { class: "btn block", onclick: async () => {
     const err = ed.validate(); if (err) return toast(err);
+    if (!dupeGuard(save, dupeNote, [ed.getDraft()])) return;
     const it = finalizeItem(ed.getDraft()); state.items.push(it); await saveState();
     closeSheet(); ui.tab = "overview"; render(); toastWithCal(it);
   } }, "儲存");
-  host.append(tip, ed, save);
+  host.append(tip, ed, dupeNote, save);
 }
 function reviewList(host, drafts, doneLabel) {
   const list = h("div", { style: "display:grid;gap:12px" });
+  const dupeNote = h("div");
   const editors = [];
   function redraw() {
     list.replaceChildren(h("div", { class: "status", text: `共 ${editors.length} 筆，請確認內容後儲存` }), ...editors);
@@ -878,6 +885,7 @@ function reviewList(host, drafts, doneLabel) {
   }
   const saveBtn = h("button", { class: "btn block", onclick: async () => {
     for (const ed of editors) { const err = ed.validate(); if (err) return toast(err); }
+    if (!dupeGuard(saveBtn, dupeNote, editors.map(ed => ed.getDraft()))) return;
     const added = editors.map(ed => finalizeItem(ed.getDraft()));
     state.items.push(...added); await saveState();
     closeSheet(); ui.tab = "overview"; render();
@@ -887,7 +895,7 @@ function reviewList(host, drafts, doneLabel) {
     const ed = buildEditor(d, { removable: true, onRemove: () => { editors.splice(editors.indexOf(ed), 1); redraw(); } });
     editors.push(ed);
   });
-  host.append(list, saveBtn); redraw();
+  host.append(list, dupeNote, saveBtn); redraw();
 }
 function pasteMode(host) {
   const ta = h("textarea", { id: "paste-box", placeholder: "把 AI 回覆的內容整段貼在這裡" });
@@ -1246,6 +1254,21 @@ function armedDelete(fn, label = "刪除此筆") {
     clearTimeout(t); fn();
   } }, label);
   return b;
+}
+// 找出與現有追蹤中項目「同名＋同到期日」的草稿
+function findDupes(drafts) {
+  const key = (n, e) => String(n || "").trim().toLowerCase() + "|" + e;
+  const have = new Set(state.items.filter(i => i.status === "active").map(i => key(i.name, i.expiry)));
+  return drafts.filter(d => have.has(key(d.name, d.expiry))).map(d => String(d.name).trim());
+}
+// 儲存前的重複確認：第一次按顯示提醒，再按一次才新增
+function dupeGuard(btn, noteHost, drafts, label) {
+  const dupes = findDupes(drafts);
+  if (!dupes.length || btn.dataset.confirmed === "1") return true;
+  btn.dataset.confirmed = "1"; btn.textContent = "仍要新增";
+  noteHost.replaceChildren(h("div", { class: "banner" }, h("b", null, "已有相同項目："), `${[...new Set(dupes)].join("、")}（同名且到期日相同）。確定要再新增，請再按一次「仍要新增」；不需要的話可關閉此畫面。`));
+  noteHost.scrollIntoView({ behavior: "smooth", block: "center" });
+  return false;
 }
 function toastWithCal(it) { toast(`已新增「${it.name}」，可在項目內加入行事曆`); }
 
