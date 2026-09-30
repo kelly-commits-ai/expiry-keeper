@@ -962,17 +962,17 @@ function photoMode(host) {
   const out = h("div");
   const mkInput = (capture) => {
     const inp = h("input", { type: "file", accept: "image/*", multiple: capture ? null : true, capture: capture ? "environment" : null, hidden: true });
-    inp.addEventListener("change", () => { for (const f of inp.files) if (files.length < 6) files.push(f); inp.value = ""; drawThumbs(); });
+    inp.addEventListener("change", () => { let skip = 0; for (const f of inp.files) { if (files.length < MAX_PHOTOS) files.push(f); else skip++; } inp.value = ""; drawThumbs(); if (skip) toast(`每批最多 ${MAX_PHOTOS} 張，已略過 ${skip} 張`); });
     return inp;
   };
   const camIn = mkInput(true), libIn = mkInput(false);
   function drawThumbs() {
     thumbs.replaceChildren(...files.map(f => { const img = h("img", { alt: "已選照片" }); img.src = URL.createObjectURL(f); return img; }));
     runBtn.disabled = !files.length;
-    status.textContent = files.length ? `已選 ${files.length} 張（同一商品的正面與日期面可一起辨識，最多 6 張）` : "";
+    status.textContent = files.length ? `已選 ${files.length}／${MAX_PHOTOS} 張（同一商品的正面與日期面請放在同一批）` : "";
   }
   const runBtn = h("button", { class: "btn block", disabled: true, onclick: async () => {
-    runBtn.disabled = true; status.replaceChildren(h("span", { class: "spin" }), "辨識中，約需 5–20 秒…");
+    runBtn.disabled = true; status.replaceChildren(h("span", { class: "spin" }), files.length > 6 ? "辨識中，照片較多約需 15–40 秒…" : "辨識中，約需 5–20 秒…");
     try {
       const arr = await geminiRecognize(files, (t) => status.replaceChildren(h("span", { class: "spin" }), t));
       if (!arr || !arr.length) throw { friendly: "沒有辨識到品項，請換個角度或光線再拍一次" };
@@ -1223,6 +1223,7 @@ async function geminiCall(path, init) {
   return res.json();
 }
 // 呼叫 Gemini 產生內容：忙碌（5xx）或限流（429）時自動重試，再改用備援模型
+const MAX_PHOTOS = 12; // 拍照辨識每批上限
 const GEMINI_FALLBACK = "gemini-flash-lite-latest";
 async function geminiGenerate(body, onStatus) {
   const primary = state.settings.ai.model || "gemini-flash-latest";
@@ -1242,7 +1243,8 @@ async function geminiGenerate(body, onStatus) {
 }
 async function geminiRecognize(files, onStatus) {
   const parts = [{ text: aiPrompt(false) }];
-  for (const f of files) parts.push({ inline_data: { mime_type: "image/jpeg", data: await fileToJpegBase64(f) } });
+  const side = files.length > 6 ? 1280 : 1600; // 張數多時縮小照片，控制傳送量
+  for (const f of files) parts.push({ inline_data: { mime_type: "image/jpeg", data: await fileToJpegBase64(f, side) } });
   const j = await geminiGenerate({ contents: [{ role: "user", parts }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } }, onStatus);
   const text = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
   return extractJSON(text);
