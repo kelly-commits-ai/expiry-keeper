@@ -172,6 +172,9 @@ button{cursor:pointer}
 .scanbtn{flex:none;display:inline-flex;align-items:center;gap:4px;height:44px;padding:0 12px;border:1px solid var(--accent);border-radius:var(--r-sm);background:var(--surface);color:var(--accent);font-size:16px;font-weight:600}
 .scanbtn svg{width:20px;height:20px}
 .overlay{z-index:50}
+.crop-stage{position:relative;touch-action:none;user-select:none;-webkit-user-select:none;border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--line)}
+.crop-img{display:block;width:100%;height:auto;pointer-events:none}
+.crop-box{position:absolute;border:2px solid var(--gold);box-shadow:0 0 0 9999px rgba(0,0,0,.45);border-radius:4px;pointer-events:none}
 .scan-img{width:100%;max-height:240px;object-fit:contain;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--surface-2)}
 .bar{height:6px;border-radius:999px;background:var(--surface-2);overflow:hidden;border:1px solid var(--line)}
 .bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
@@ -264,7 +267,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <script>
 "use strict";
 /* ============ 常數與預設 ============ */
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.2.1";
 const LOCS = ["冷藏","冷凍","常溫"];
 const ITEM_GROUPS = [
   ["生鮮食材", ["葉菜類","根莖瓜果","水果","肉類","海鮮","蛋","豆製品","乳製品","熟食剩菜","麵包烘焙"]],
@@ -856,7 +859,7 @@ function openAddSheet() {
 }
 function manualMode(host) {
   const ed = buildEditor(blankDraft("item"));
-  const tip = h("div", { class: "note" }, h("b", null, "小技巧："), "按欄位右側的「掃描」，拍下包裝上的品名或日期，即可點選帶入。拍攝時請靠近文字、避免反光。");
+  const tip = h("div", { class: "note" }, h("b", null, "小技巧："), "按欄位右側的「掃描」拍下包裝，再用手指框住品名或日期那一行，即可點選帶入。框得越精準、越沒有反光，辨識越準。");
   const save = h("button", { class: "btn block", onclick: async () => {
     const err = ed.validate(); if (err) return toast(err);
     const it = finalizeItem(ed.getDraft()); state.items.push(it); await saveState();
@@ -942,67 +945,107 @@ function photoMode(host) {
     h("div", { class: "note" }, "照片會縮小後送到 Google Gemini 辨識，不會存在本 App。訂閱截圖請先裁掉 Email、帳號等個人資訊。"));
 }
 
-/* ============ 掃描（相機文字辨識） ============ */
+/* ============ 掃描（拍照 → 框選 → 文字辨識） ============ */
 const OCR_LIB = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
-let ocrWorkerP = null, ocrProgress = null;
+const ocrWorkers = {}; let ocrProgress = null;
 function loadScript(src) {
   return new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = src; sc.onload = res; sc.onerror = () => rej(new Error("load")); document.head.append(sc); });
 }
-function getOcrWorker() {
-  if (!ocrWorkerP) ocrWorkerP = (async () => {
+function getOcrWorker(kind) { // kind: "mixed"（繁中＋英數）或 "eng"（英數，用於日期）
+  if (!ocrWorkers[kind]) ocrWorkers[kind] = (async () => {
     if (!window.Tesseract) await loadScript(window.__OCR_LIB__ || OCR_LIB);
     const opts = Object.assign({ logger: (m) => ocrProgress && ocrProgress(m) }, window.__OCR_OPTS__ || {});
-    return Tesseract.createWorker(["chi_tra", "eng"], 1, opts);
-  })().catch(e => { ocrWorkerP = null; throw { friendly: "無法載入辨識資料，請確認網路連線後再試一次" }; });
-  return ocrWorkerP;
+    return Tesseract.createWorker(kind === "eng" ? ["eng"] : ["chi_tra", "eng"], 1, opts);
+  })().catch(e => { delete ocrWorkers[kind]; throw { friendly: "無法載入辨識資料，請確認網路連線後再試一次" }; });
+  return ocrWorkers[kind];
 }
-function prepCanvas(file, maxSide = 1800) {
-  return new Promise((res, rej) => {
-    const img = new Image(); const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const k = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
-      const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
-      const g = c.getContext("2d"); g.drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); res(c);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); rej({ friendly: "無法讀取這張照片" }); };
-    img.src = url;
-  });
+function loadImage(file) {
+  return new Promise((res, rej) => { const img = new Image(); img.onload = () => res(img); img.onerror = () => rej({ friendly: "無法讀取這張照片" }); img.src = URL.createObjectURL(file); });
+}
+// 影像前處理：裁切、縮放、灰階、自動反相（淺字深底）、可選模糊與二值化
+function prepCanvas(img, r, o = {}) {
+  const k = o.h ? o.h / r.h : Math.min(1, (o.max || 1600) / Math.max(r.w, r.h));
+  const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(r.w * k)); c.height = Math.max(1, Math.round(r.h * k));
+  const g = c.getContext("2d", { willReadFrequently: true });
+  if (o.blur) g.filter = `blur(${o.blur}px)`;
+  g.drawImage(img, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height); g.filter = "none";
+  if (o.color) return c;
+  const d = g.getImageData(0, 0, c.width, c.height), a = d.data, n = a.length / 4;
+  const L = new Uint8Array(n), hist = new Array(256).fill(0);
+  for (let i = 0; i < n; i++) { const v = (a[i * 4] * 0.299 + a[i * 4 + 1] * 0.587 + a[i * 4 + 2] * 0.114) | 0; L[i] = v; hist[v]++; }
+  let sum = 0; for (let t = 0; t < 256; t++) sum += t * hist[t];
+  let sB = 0, wB = 0, best = 0, th = 127;
+  for (let t = 0; t < 256; t++) { wB += hist[t]; if (!wB) continue; const wF = n - wB; if (!wF) break; sB += t * hist[t]; const mB = sB / wB, mF = (sum - sB) / wF, bt = wB * wF * (mB - mF) ** 2; if (bt > best) { best = bt; th = t; } }
+  let dark = 0; for (let i = 0; i < n; i++) if (L[i] < th) dark++;
+  const invert = dark > n / 2; // 暗色占多數 → 背景深、字淺 → 反相成白底黑字
+  for (let i = 0; i < n; i++) {
+    let v = invert ? 255 - L[i] : L[i];
+    if (o.bin) v = v < (invert ? 255 - th : th) ? 0 : 255;
+    a[i * 4] = a[i * 4 + 1] = a[i * 4 + 2] = v;
+  }
+  g.putImageData(d, 0, 0); return c;
 }
 function cleanLine(t) {
-  return t.replace(/(?<=[㐀-鿿＀-￯])\s+(?=[㐀-鿿＀-￯])/g, "").replace(/\s{2,}/g, " ").trim();
+  return String(t).replace(/(?<=[㐀-鿿＀-￯])\s+(?=[㐀-鿿＀-￯])/g, "").replace(/\s{2,}/g, " ").trim();
 }
-async function ocrLines(file, onStatus) {
+// 修正數字中常見的誤判：O→0、I/l/|→1、S→5、B→8、Z→2
+function fixDigits(t) {
+  return String(t).replace(/[0-9OoQDIl|SZB][0-9OoQDIl|SZB .\/\-:]{4,}[0-9OoQDIl|SZB]/g, seg => {
+    const digits = (seg.match(/\d/g) || []).length; if (digits < 4) return seg;
+    return seg.replace(/[OoQD]/g, "0").replace(/[Il|]/g, "1").replace(/S/g, "5").replace(/B/g, "8").replace(/Z/g, "2").replace(/\s+(?=[.\/\-])|(?<=[.\/\-])\s+/g, "");
+  });
+}
+function goodLines(data, minConf = 35) {
+  const lines = (data.lines && data.lines.length ? data.lines.filter(l => l.confidence >= minConf).map(l => l.text) : String(data.text || "").split("\n"));
+  return lines.map(cleanLine).filter(t => t && /[㐀-鿿A-Za-z0-9]/.test(t));
+}
+async function ocrRegion(img, r, mode, onStatus) {
   if (state.settings.ai.key) {
-    onStatus("以 Gemini 辨識文字中…", null);
-    const b64 = await fileToJpegBase64(file);
+    onStatus("以 Gemini 辨識中…", null);
+    const c = prepCanvas(img, r, { color: true, max: 1600 });
+    const b64 = c.toDataURL("image/jpeg", 0.9).split(",")[1];
     const model = state.settings.ai.model || "gemini-flash-latest";
     const j = await geminiCall(`models/${encodeURIComponent(model)}:generateContent`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "請逐行抄錄圖片中所有看得到的文字（繁體中文照原樣，保留數字與符號），輸出 JSON 字串陣列，每一行一個元素，不要其他說明。" }, { inline_data: { mime_type: "image/jpeg", data: b64 } }] }], generationConfig: { temperature: 0, responseMimeType: "application/json" } })
+      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "請逐行抄錄圖片中所有看得到的文字（繁體中文照原樣，保留數字與符號；點陣噴印的日期也要讀出），輸出 JSON 字串陣列，每一行一個元素，不要其他說明。" }, { inline_data: { mime_type: "image/jpeg", data: b64 } }] }], generationConfig: { temperature: 0, responseMimeType: "application/json" } })
     });
     const text = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
     let arr = null; try { arr = JSON.parse(text); } catch (e) { arr = extractJSON(text); }
-    return (Array.isArray(arr) ? arr : String(text).split("\n")).map(x => cleanLine(String(x))).filter(Boolean);
+    const lines = (Array.isArray(arr) ? arr : String(text).split("\n")).map(x => cleanLine(String(x))).filter(Boolean);
+    return { lines, texts: [lines.join("\n")] };
   }
-  ocrProgress = (m) => {
-    if (m.status === "recognizing text") onStatus("辨識文字中…", m.progress);
-    else if (/load|initializ/i.test(m.status)) onStatus("首次使用正在下載辨識資料（約 8 MB，只需一次）…", m.progress);
-  };
-  onStatus("準備辨識…", null);
-  const worker = await getOcrWorker();
-  const canvas = await prepCanvas(file);
-  const { data } = await worker.recognize(canvas);
+  ocrProgress = (m) => { if (/load|initializ/i.test(m.status)) onStatus("首次使用正在下載辨識資料（約 8 MB，只需一次）…", m.progress); };
+  const plans = mode === "date"
+    ? [["mixed", { max: 1400 }, "6"], ["eng", { h: 100, bin: 1, blur: 2 }, "11"], ["eng", { h: 130, bin: 1, blur: 2 }, "11"], ["eng", { h: 180, bin: 1, blur: 4 }, "11"], ["eng", { h: 130, blur: 2 }, "11"], ["eng", { h: 100 }, "7"]]
+    : [["mixed", { h: 100 }, "6"], ["mixed", { max: 1400 }, "6"], ["mixed", { h: 100 }, "11"]];
+  let bestLines = [], bestScore = -1; const texts = [];
+  for (let i = 0; i < plans.length; i++) {
+    const [kind, o, psm] = plans[i];
+    onStatus(`辨識中（${i + 1}/${plans.length}）…`, (i + 0.5) / plans.length);
+    const w = await getOcrWorker(kind);
+    await w.setParameters({ tessedit_pageseg_mode: psm });
+    const { data } = await w.recognize(prepCanvas(img, r, o));
+    texts.push(fixDigits(data.text || ""));
+    if (kind === "mixed") {
+      const lines = goodLines(data);
+      const score = lines.length ? data.confidence : -1;
+      if (score > bestScore) { bestScore = score; bestLines = lines; }
+    }
+  }
   ocrProgress = null;
-  return String(data.text || "").split("\n").map(cleanLine).filter(t => t.length >= 1);
+  return { lines: bestLines, texts };
 }
-function findDates(text) {
-  const s = toHalf(String(text)).replace(/[ \t]+/g, "");
+function findDates(texts) {
+  const tally = new Map();
   const re = /\d{1,4}[.\/\-年]\d{1,2}[.\/\-月]\d{1,4}日?|\d{3,4}[.\/\-年]\d{1,2}月?|\d{1,2}[.\/\-]\d{4}|\d{6,8}/g;
-  const out = []; const seen = new Set(); let m;
-  while ((m = re.exec(s))) { const p = parseToken(m[0]); if (p && !seen.has(p.date)) { seen.add(p.date); out.push({ ...p, raw: m[0] }); } }
-  const best = parseDateText(text);
-  if (best) { out.sort((a, b) => (b.date === best.date) - (a.date === best.date)); }
-  return out;
+  let bestKw = null;
+  for (const text of texts) {
+    const s = toHalf(fixDigits(text)).replace(/[ \t]+/g, ""); let m;
+    const seen = new Set();
+    while ((m = re.exec(s))) { const p = parseToken(m[0]); if (p && !seen.has(p.date)) { seen.add(p.date); const e = tally.get(p.date) || { ...p, raw: m[0], n: 0 }; e.n++; tally.set(p.date, e); } }
+    if (!bestKw && /有效|到期|期限|賞味|EXP|BB|BEST|USE/i.test(s)) bestKw = parseDateText(s)?.date || null;
+  }
+  return [...tally.values()].sort((a, b) => (b.date === bestKw) - (a.date === bestKw) || b.n - a.n || (b.date > a.date ? 1 : -1));
 }
 function scanButton(mode, label, apply) {
   const inp = h("input", { type: "file", accept: "image/*", capture: "environment", hidden: true });
@@ -1011,53 +1054,80 @@ function scanButton(mode, label, apply) {
   return h("span", { style: "display:contents" }, b, inp);
 }
 function closeScan() { $("#scan-root").replaceChildren(); }
-function openScan(mode, label, file, apply, retake) {
-  const img = h("img", { class: "scan-img", alt: "拍攝的照片" }); img.src = URL.createObjectURL(file);
-  const status = h("div", { class: "status" }, h("span", { class: "spin" }), "準備辨識…");
-  const bar = h("div", { class: "bar", hidden: true }, h("i"));
-  const results = h("div", { style: "display:grid;gap:14px" });
-  const body = h("div", { class: "panel-b" }, img, status, bar, results,
-    h("div", { class: "btn-row" }, h("button", { class: "btn ghost", onclick: () => { closeScan(); retake(); } }, h("span", { svg: ICON.cam }), "重拍"), h("button", { class: "btn ghost", onclick: closeScan }, "取消")));
+async function openScan(mode, label, file, apply, retake) {
+  const body = h("div", { class: "panel-b" });
   const sheet = h("div", { class: "sheet overlay", role: "dialog", "aria-modal": "true", "aria-label": "掃描" + label },
     h("div", { class: "panel" }, h("div", { class: "panel-h" }, h("h3", { text: "掃描" + label }), h("button", { class: "x", "aria-label": "關閉", svg: ICON.close, onclick: closeScan })), body));
   $("#scan-root").replaceChildren(sheet);
-  const setStatus = (t, p) => {
-    status.replaceChildren(h("span", { class: "spin" }), t);
-    if (p == null) bar.hidden = true; else { bar.hidden = false; bar.firstChild.style.width = Math.round(p * 100) + "%"; }
-  };
-  ocrLines(file, setStatus).then(lines => {
+  let img; try { img = await loadImage(file); } catch (e) { body.append(h("div", { class: "note", text: e.friendly })); return; }
+  const W = img.naturalWidth, H = img.naturalHeight;
+  // 預設框：中央 84% 寬、18% 高
+  let sel = { x: 0.08, y: 0.41, w: 0.84, h: 0.18 };
+
+  function drawCrop() {
+    const view = h("img", { class: "crop-img", alt: "拍攝的照片", draggable: "false" }); view.src = img.src;
+    const box = h("div", { class: "crop-box" });
+    const stage = h("div", { class: "crop-stage" }, view, box);
+    const place = () => { box.style.left = sel.x * 100 + "%"; box.style.top = sel.y * 100 + "%"; box.style.width = sel.w * 100 + "%"; box.style.height = sel.h * 100 + "%"; };
+    place();
+    let start = null;
+    const pt = (e) => { const r = stage.getBoundingClientRect(); return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) }; };
+    stage.addEventListener("pointerdown", (e) => { e.preventDefault(); stage.setPointerCapture(e.pointerId); start = pt(e); });
+    stage.addEventListener("pointermove", (e) => { if (!start) return; const p = pt(e); sel = { x: Math.min(start.x, p.x), y: Math.min(start.y, p.y), w: Math.abs(p.x - start.x), h: Math.abs(p.y - start.y) }; place(); });
+    stage.addEventListener("pointerup", () => { start = null; if (sel.w < 0.03 || sel.h < 0.02) { sel = { x: 0.08, y: 0.41, w: 0.84, h: 0.18 }; place(); toast("框選範圍太小，請再拖曳一次"); } });
+    body.replaceChildren(
+      h("div", { class: "note" }, h("b", null, "用手指在照片上拖曳，框住要辨識的文字。"), mode === "date" ? "只框日期那一行，準確度最高。" : "只框品名那一行，準確度最高。"),
+      stage,
+      h("button", { class: "btn block", onclick: run }, "辨識框選範圍"),
+      h("div", { class: "btn-row" }, h("button", { class: "btn ghost", onclick: () => { closeScan(); retake(); } }, h("span", { svg: ICON.cam }), "重拍"), h("button", { class: "btn ghost", onclick: closeScan }, "取消")));
+  }
+
+  async function run() {
+    const r = { x: Math.round(sel.x * W), y: Math.round(sel.y * H), w: Math.max(8, Math.round(sel.w * W)), h: Math.max(8, Math.round(sel.h * H)) };
+    const preview = prepCanvas(img, r, { color: true, max: 900 }); preview.className = "scan-img";
+    const status = h("div", { class: "status" }, h("span", { class: "spin" }), "準備辨識…");
+    const bar = h("div", { class: "bar", hidden: true }, h("i"));
+    const results = h("div", { style: "display:grid;gap:14px" });
+    body.replaceChildren(preview, status, bar, results,
+      h("div", { class: "btn-row" }, h("button", { class: "btn ghost", onclick: drawCrop }, "重新框選"), h("button", { class: "btn ghost", onclick: () => { closeScan(); retake(); } }, h("span", { svg: ICON.cam }), "重拍")));
+    const setStatus = (t, p) => { status.replaceChildren(h("span", { class: "spin" }), t); if (p == null) bar.hidden = true; else { bar.hidden = false; bar.firstChild.style.width = Math.round(p * 100) + "%"; } };
+    let out;
+    try { out = await ocrRegion(img, r, mode, setStatus); }
+    catch (e) { bar.hidden = true; status.textContent = e.friendly || "辨識失敗，請重新框選或重拍"; return; }
     if (!document.body.contains(sheet)) return;
-    bar.hidden = true;
-    if (!lines.length) { status.textContent = "沒有辨識到文字。請靠近一點、避免反光後重拍。"; return; }
-    status.textContent = "";
+    bar.hidden = true; status.textContent = "";
+    const lines = out.lines;
     if (mode === "date") {
-      const dates = findDates(lines.join("\n"));
+      const dates = findDates(out.texts);
       if (dates.length) {
         results.append(h("div", { class: "sec-title", style: "margin:0" }, h("h2", { text: "找到的日期" }), h("span", { class: "hint", text: "點選帶入" })),
           h("div", { class: "pick-list" }, dates.map((d, i) => h("button", { class: "cand" + (i === 0 ? " best" : ""), onclick: () => { apply(d.date); closeScan(); toast("已帶入 " + prettyDate(d.date)); } },
-            h("span", { class: "num", text: prettyDate(d.date) + (i === 0 && dates.length > 1 ? "　最可能是到期日" : "") }), h("small", { text: `原文 ${d.raw}${d.how ? "・" + d.how : ""}` })))));
+            h("span", { class: "num", text: prettyDate(d.date) + (i === 0 && dates.length > 1 ? "　最可能" : "") }), h("small", { text: `辨識原文 ${d.raw}${d.how ? "・" + d.how : ""}` })))));
       } else {
-        results.append(h("div", { class: "note", text: "照片中沒有找到可辨識的日期格式。可以點下方文字試試，或重拍日期部分。" }));
+        results.append(h("div", { class: "note", text: "框選範圍內沒有找到日期。請只框住日期那一行、避免反光後再試；或直接在欄位輸入。" }));
       }
-      results.append(h("div", { class: "sec-title", style: "margin:0" }, h("h2", { text: "辨識到的文字" })),
-        h("div", { class: "line-chips" }, lines.map(t => h("button", { class: "lchip", onclick: () => { const r = parseDateText(t); if (r) { apply(r.date); closeScan(); toast("已帶入 " + prettyDate(r.date)); } else toast("這段文字中沒有日期"); } }, t))));
+      if (lines.length) results.append(h("div", { class: "sec-title", style: "margin:0" }, h("h2", { text: "辨識到的文字" })),
+        h("div", { class: "line-chips" }, lines.map(t => h("button", { class: "lchip", onclick: () => { const r2 = parseDateText(fixDigits(t)); if (r2) { apply(r2.date); closeScan(); toast("已帶入 " + prettyDate(r2.date)); } else toast("這段文字中沒有日期"); } }, t))));
     } else {
+      if (!lines.length) { results.append(h("div", { class: "note", text: "沒有辨識到文字。請只框住品名那一行、避免反光後再試。" })); return; }
       const picked = [];
-      const preview = h("input", { type: "text", id: fid("sp"), placeholder: "點選下方文字組合品名，也可直接修改" });
+      const input = h("input", { type: "text", id: fid("sp"), value: lines.length === 1 ? lines[0] : "", placeholder: "點選上方文字組合，也可直接修改" });
+      if (lines.length === 1) picked.push(lines[0]);
       const chips = lines.map(t => {
-        const c = h("button", { class: "lchip", "aria-pressed": "false", onclick: () => {
+        const c = h("button", { class: "lchip", "aria-pressed": String(picked.includes(t)), onclick: () => {
           const i = picked.indexOf(t);
           if (i >= 0) { picked.splice(i, 1); c.setAttribute("aria-pressed", "false"); } else { picked.push(t); c.setAttribute("aria-pressed", "true"); }
-          preview.value = picked.join(" ");
+          input.value = picked.join(" ");
         } }, t);
         return c;
       });
-      results.append(h("div", { class: "sec-title", style: "margin:0" }, h("h2", { text: "辨識到的文字" }), h("span", { class: "hint", text: "可複選，依點選順序組合" })),
+      results.append(h("div", { class: "sec-title", style: "margin:0" }, h("h2", { text: "辨識到的文字" }), h("span", { class: "hint", text: "可複選" })),
         h("div", { class: "line-chips" }, chips),
-        h("div", { class: "f" }, h("label", { for: preview.id, text: label }), preview),
-        h("button", { class: "btn block", onclick: () => { const v = preview.value.trim(); if (!v) return toast("請先點選文字"); apply(v); closeScan(); toast("已帶入" + label); } }, "帶入" + label));
+        h("div", { class: "f" }, h("label", { for: input.id, text: label }), input),
+        h("button", { class: "btn block", onclick: () => { const v = input.value.trim(); if (!v) return toast("請先點選文字"); apply(v); closeScan(); toast("已帶入" + label); } }, "帶入" + label));
     }
-  }).catch(e => { if (document.body.contains(sheet)) { bar.hidden = true; status.textContent = e.friendly || "辨識失敗，請重拍一次"; } });
+  }
+  drawCrop();
 }
 
 /* ============ Gemini ============ */
