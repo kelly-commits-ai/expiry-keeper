@@ -297,7 +297,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <script>
 "use strict";
 /* ============ 常數與預設 ============ */
-const APP_VERSION = "1.4.1";
+const APP_VERSION = "1.5.0";
 const LOCS = ["冷藏","冷凍","常溫"];
 const ITEM_GROUPS = [
   ["生鮮食材", ["葉菜類","根莖瓜果","水果","肉類","海鮮","蛋","豆製品","乳製品","熟食剩菜","麵包烘焙"]],
@@ -523,7 +523,7 @@ function toast(msg, ms = 2600) {
 }
 function renderBanner() {
   const slot = $("#banner-slot"); slot.replaceChildren();
-  if (storageMode === "memory") slot.append(h("div", { class: "banner", text: "此瀏覽器無法儲存資料，關閉頁面後資料會消失。請用 Safari 開啟並「加入主畫面」後使用。" }));
+  if (storageMode === "memory") slot.append(h("div", { class: "banner", text: IS_ANDROID ? "此瀏覽器無法儲存資料，關閉頁面後資料會消失。請用 Chrome 開啟並「安裝應用程式」後使用。" : "此瀏覽器無法儲存資料，關閉頁面後資料會消失。請用 Safari 開啟並「加入主畫面」後使用。" }));
 }
 
 /* ============ 圖示 ============ */
@@ -1287,7 +1287,17 @@ function openEditSheet(id) {
     actions = h("div", { class: "btn-row" }, renew, h("button", { class: "btn ghost", onclick: () => close("cancelled", "已標記為取消訂閱") }, "已取消訂閱"));
   }
   const del = armedDelete(async () => { state.items = state.items.filter(i => i.id !== id); await saveState(); closeSheet(); render(); toast("已刪除"); });
-  openSheet(it.kind === "item" ? "編輯物品" : "編輯訂閱", [ed, h("div", { class: "btn-row" }, save, cal), actions, del]);
+  let calRow = h("div", { class: "btn-row" }, save, cal);
+  if (IS_ANDROID) {
+    const gcal = h("a", { class: "btn ghost", target: "_blank", rel: "noopener", href: "#", onclick: async (e) => {
+      const d = ed.getDraft(); if (!isISO(d.expiry)) { e.preventDefault(); return toast("請先填寫到期日"); }
+      gcal.href = googleCalUrl(finalizeItem(d, it)); it.calAddedAt = today(); saveState();
+    } }, h("span", { svg: ICON.cal }), it.calAddedAt ? "再次加入 Google 日曆" : "加入 Google 日曆");
+    cal.lastChild.textContent = "下載行事曆檔（.ics）";
+    calRow = h("div", { style: "display:grid;gap:8px" }, h("div", { class: "btn-row" }, save, gcal), cal,
+      h("div", { class: "help", style: "font-size:14px;color:var(--ink-2)" }, "Google 日曆的提醒時間請在事件的「通知」自行設定；.ics 檔可保留「提前 N 天」的提醒，需用支援匯入的日曆 App 開啟。"));
+  }
+  openSheet(it.kind === "item" ? "編輯物品" : "編輯訂閱", [ed, calRow, actions, del]);
 }
 // 勾選要加入行事曆的項目（預設不勾；已加入過的會標示）
 function openCalPicker(items) {
@@ -1316,7 +1326,9 @@ function openCalPicker(items) {
   });
   const notYet = list.filter(i => !i.calAddedAt);
   openSheet("選擇加入行事曆", [
-    h("div", { class: "note" }, "勾選要加入 iPhone 行事曆的項目。標示「已加入過」的項目再加入一次，行事曆裡會出現重複的事件。"),
+    h("div", { class: "note" }, IS_ANDROID
+      ? "勾選後會產生一個行事曆檔（.ics），在分享選單中選擇日曆 App 開啟即可一次加入。若手機的日曆無法開啟，請在單一項目內改按「加入 Google 日曆」。標示「已加入過」的項目再加入會重複。"
+      : "勾選要加入 iPhone 行事曆的項目。標示「已加入過」的項目再加入一次，行事曆裡會出現重複的事件。"),
     h("div", { class: "sec-title", style: "margin:0" }, count, h("div", { class: "btn-row", style: "gap:8px" },
       notYet.length ? h("button", { class: "btn ghost sm", onclick: () => { notYet.forEach(i => picked.add(i.id)); sync(); } }, `選取未加入（${notYet.length}）`) : null,
       h("button", { class: "btn ghost sm", onclick: () => { picked.clear(); sync(); } }, "全部取消"))),
@@ -1400,6 +1412,14 @@ function renderHistory(v) {
 function renderSettings(v) {
   const s = state.settings;
   v.append(h("div", { class: "ver-line num" }, h("span", { class: "tag gold", text: "版本 " + APP_VERSION }), h("span", { text: `資料儲存：${storageMode === "idb" ? "裝置資料庫" : storageMode === "local" ? "瀏覽器儲存" : "暫存（不會保留）"}` })));
+  if (!IS_STANDALONE && !window.__PREVIEW__) {
+    const steps = IS_ANDROID
+      ? "用 Chrome 開啟，點右上角「⋮」→「安裝應用程式」或「加到主畫面」。"
+      : "用 Safari 開啟，點下方「分享」→「加入主畫面」→「新增」。";
+    const box = h("div", { class: "banner" }, h("b", null, "尚未安裝到主畫面。"), "安裝後資料才能長期保存。" + steps);
+    if (IS_ANDROID && window.__installPrompt) box.append(h("div", { style: "margin-top:8px" }, h("button", { class: "btn sm", onclick: async () => { const pr = window.__installPrompt; window.__installPrompt = null; pr.prompt(); await pr.userChoice.catch(() => {}); render(); } }, "立即安裝")));
+    v.append(box);
+  }
   v.append(h("div", { class: "sec-title" }, h("h2", { text: "主題色系" })));
   v.append(h("div", { class: "pal-grid", role: "group", "aria-label": "主題色系" }, PALETTES.map(p => h("button", { class: "pal", "aria-pressed": String((s.palette || DEFAULT_SETTINGS.palette) === p.id), onclick: async () => { s.palette = p.id; applyPalette(p.id); await saveState(); render(); toast("已切換為「" + p.name + "」"); } },
     h("span", { class: "dots" }, p.colors.map(c => h("i", { style: `background:${c}` }))), h("span", { text: p.name }), p.note ? h("small", { style: "color:var(--ink-2);font-size:14px;font-weight:400", text: p.note }) : null))));
@@ -1495,10 +1515,27 @@ function renderSettings(v) {
     armedDelete(async () => { state.items = []; await saveState(); render(); toast("已清除全部資料"); }, "清除全部資料")));
 }
 
+/* ============ 平台判斷 ============ */
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); window.__installPrompt = e; });
+const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const IS_ANDROID = /Android/i.test(navigator.userAgent);
+const IS_STANDALONE = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+// Google 日曆新增事件連結（Android 單筆使用；提醒時間依 Google 日曆預設）
+function googleCalUrl(it) {
+  const d = it.expiry.replace(/-/g, ""), d2 = addDays(it.expiry, 1).replace(/-/g, "");
+  const label = it.kind === "sub" ? (it.autoRenew ? "續訂" : "到期") : "到期";
+  const info = it.kind === "sub"
+    ? `${it.plan ? it.plan + "・" : ""}${it.amount ? money(it.amount) + "／" + it.cycle + "・" : ""}${it.autoRenew ? "自動續訂" : "手動續訂"}`
+    : `${it.location}・${it.category}${it.qty ? "・" + it.qty + (it.unit || "") : ""}`;
+  const details = `${info}${it.note ? "\n" + it.note : ""}\n建議提醒：提前 ${it.remindDays || 0} 天（請在 Google 日曆的「通知」設定）\n（效期管家）`;
+  const q = new URLSearchParams({ action: "TEMPLATE", text: `【${label}】${it.name}`, dates: `${d}/${d2}`, details });
+  return "https://calendar.google.com/calendar/render?" + q.toString();
+}
+
 /* ============ 檔案輸出（行事曆／備份） ============ */
 async function deliverFile(name, text, mime) {
   const blob = new Blob([text], { type: mime });
-  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isIOS = IS_IOS;
   if (mime === "text/calendar" && isIOS) {
     // iOS：以 Safari 開啟 .ics 會直接出現「加入行事曆」畫面
     const url = URL.createObjectURL(blob);
@@ -1506,7 +1543,8 @@ async function deliverFile(name, text, mime) {
     setTimeout(() => URL.revokeObjectURL(url), 60000); return;
   }
   const f = new File([blob], name, { type: mime });
-  if (isIOS && navigator.canShare && navigator.canShare({ files: [f] })) {
+  // iPhone 備份檔、Android 的 .ics 與備份檔：優先用分享選單（Android 可直接選日曆 App 開啟）
+  if ((isIOS || IS_ANDROID) && navigator.canShare && navigator.canShare({ files: [f] })) {
     try { await navigator.share({ files: [f], title: name }); return; } catch (e) { if (e && e.name === "AbortError") return; }
   }
   const url = URL.createObjectURL(blob);
