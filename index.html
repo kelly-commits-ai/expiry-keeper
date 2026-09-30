@@ -135,7 +135,7 @@ button{cursor:pointer}
 .tab{background:none;border:0;display:grid;justify-items:center;gap:2px;padding:6px 0;font-size:14px;color:var(--ink-2)}
 .tab svg{width:24px;height:24px}
 .tab[aria-current="page"]{color:var(--primary);font-weight:700}
-.tab.add .plus{width:44px;height:30px;border-radius:999px;background:var(--btn);color:var(--on-btn);display:grid;place-items:center}
+.tab.add .plus{width:44px;height:30px;border-radius:999px;background:var(--surface);color:var(--primary);border:1.5px solid var(--primary);display:grid;place-items:center}
 .tab.add .plus svg{width:20px;height:20px}
 
 /* Sheet */
@@ -222,6 +222,8 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 
 /* Toast & banner */
 .toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--primary);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:16.5px;z-index:60;max-width:calc(100% - 32px);text-align:center}
+.ver-line{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-size:15px;color:var(--ink-2);margin-bottom:4px}
+.ver-line .tag{font-size:14px;line-height:22px;padding:0 8px}
 .banner{background:var(--warn-bg);color:var(--warn);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;font-size:16px;margin-top:12px}
 </style>
 <!--STYLE-END-->
@@ -267,7 +269,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <script>
 "use strict";
 /* ============ 常數與預設 ============ */
-const APP_VERSION = "1.2.1";
+const APP_VERSION = "1.2.2";
 const LOCS = ["冷藏","冷凍","常溫"];
 const ITEM_GROUPS = [
   ["生鮮食材", ["葉菜類","根莖瓜果","水果","肉類","海鮮","蛋","豆製品","乳製品","熟食剩菜","麵包烘焙"]],
@@ -587,7 +589,7 @@ function emptyState() {
     h("h3", { text: "開始記錄第一筆" }),
     h("ol", { class: "steps" },
       h("li", null, h("span", { class: "badge", text: "01" }), h("span", null, "點下方「新增」，選擇實體物品或訂閱會員。")),
-      h("li", null, h("span", { class: "badge", text: "02" }), h("span", null, "點品名或日期欄位，選「掃描文字」對準包裝即可帶入；生鮮會依類別自動推算到期日。")),
+      h("li", null, h("span", { class: "badge", text: "02" }), h("span", null, "按品名或日期欄位旁的「掃描」，拍照或選相簿照片即可帶入；生鮮會依類別自動推算到期日。")),
       h("li", null, h("span", { class: "badge", text: "03" }), h("span", null, "儲存後按「加入行事曆」，到期前 iPhone 會準時提醒。"))),
     h("div", { class: "btn-row" },
       h("button", { class: "btn", onclick: openAddSheet }, "新增第一筆"),
@@ -859,7 +861,7 @@ function openAddSheet() {
 }
 function manualMode(host) {
   const ed = buildEditor(blankDraft("item"));
-  const tip = h("div", { class: "note" }, h("b", null, "小技巧："), "按欄位右側的「掃描」拍下包裝，再用手指框住品名或日期那一行，即可點選帶入。框得越精準、越沒有反光，辨識越準。");
+  const tip = h("div", { class: "note" }, h("b", null, "小技巧："), "按欄位右側的「掃描」，拍照或從相簿選照片，再用手指框住品名或日期那一行，即可點選帶入。框得越精準、越沒有反光，辨識越準。");
   const save = h("button", { class: "btn block", onclick: async () => {
     const err = ed.validate(); if (err) return toast(err);
     const it = finalizeItem(ed.getDraft()); state.items.push(it); await saveState();
@@ -970,6 +972,7 @@ function prepCanvas(img, r, o = {}) {
   if (o.blur) g.filter = `blur(${o.blur}px)`;
   g.drawImage(img, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height); g.filter = "none";
   if (o.color) return c;
+  if (o.adapt) return adaptiveJoin(g, c, o);
   const d = g.getImageData(0, 0, c.width, c.height), a = d.data, n = a.length / 4;
   const L = new Uint8Array(n), hist = new Array(256).fill(0);
   for (let i = 0; i < n; i++) { const v = (a[i * 4] * 0.299 + a[i * 4 + 1] * 0.587 + a[i * 4 + 2] * 0.114) | 0; L[i] = v; hist[v]++; }
@@ -983,6 +986,25 @@ function prepCanvas(img, r, o = {}) {
     if (o.bin) v = v < (invert ? 255 - th : th) ? 0 : 255;
     a[i * 4] = a[i * 4 + 1] = a[i * 4 + 2] = v;
   }
+  g.putImageData(d, 0, 0); return c;
+}
+// 自適應門檻（抗光線不均）＋黑點擴張（把點陣噴印連成筆畫）
+function adaptiveJoin(g, c, o) {
+  const w = c.width, hgt = c.height, d = g.getImageData(0, 0, w, hgt), a = d.data, n = w * hgt;
+  const L = new Float32Array(n); for (let i = 0; i < n; i++) L[i] = a[i * 4] * 0.299 + a[i * 4 + 1] * 0.587 + a[i * 4 + 2] * 0.114;
+  let mean = 0; for (let i = 0; i < n; i++) mean += L[i]; mean /= n;
+  let darkish = 0; for (let i = 0; i < n; i++) if (L[i] < mean) darkish++;
+  if (darkish > n / 2) for (let i = 0; i < n; i++) L[i] = 255 - L[i];
+  const I = new Float64Array((w + 1) * (hgt + 1));
+  for (let y = 0; y < hgt; y++) { let s2 = 0; for (let x = 0; x < w; x++) { s2 += L[y * w + x]; I[(y + 1) * (w + 1) + x + 1] = I[y * (w + 1) + x + 1] + s2; } }
+  const R2 = Math.max(8, Math.round(hgt / 6)); let B = new Uint8Array(n);
+  for (let y = 0; y < hgt; y++) for (let x = 0; x < w; x++) {
+    const x0 = Math.max(0, x - R2), y0 = Math.max(0, y - R2), x1 = Math.min(w, x + R2 + 1), y1 = Math.min(hgt, y + R2 + 1);
+    const m = (I[y1 * (w + 1) + x1] - I[y0 * (w + 1) + x1] - I[y1 * (w + 1) + x0] + I[y0 * (w + 1) + x0]) / ((x1 - x0) * (y1 - y0));
+    B[y * w + x] = L[y * w + x] < m - o.adapt ? 1 : 0;
+  }
+  for (let t = 0; t < (o.join || 0); t++) { const N = new Uint8Array(n); for (let y = 1; y < hgt - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; N[i] = B[i] | B[i - 1] | B[i + 1] | B[i - w] | B[i + w]; } B = N; }
+  for (let i = 0; i < n; i++) { const v = B[i] ? 0 : 255; a[i * 4] = a[i * 4 + 1] = a[i * 4 + 2] = v; }
   g.putImageData(d, 0, 0); return c;
 }
 function cleanLine(t) {
@@ -1016,14 +1038,14 @@ async function ocrRegion(img, r, mode, onStatus) {
   }
   ocrProgress = (m) => { if (/load|initializ/i.test(m.status)) onStatus("首次使用正在下載辨識資料（約 8 MB，只需一次）…", m.progress); };
   const plans = mode === "date"
-    ? [["mixed", { max: 1400 }, "6"], ["eng", { h: 100, bin: 1, blur: 2 }, "11"], ["eng", { h: 130, bin: 1, blur: 2 }, "11"], ["eng", { h: 180, bin: 1, blur: 4 }, "11"], ["eng", { h: 130, blur: 2 }, "11"], ["eng", { h: 100 }, "7"]]
+    ? [["mixed", { max: 1400 }, "6"], ["eng", { h: 100, bin: 1, blur: 2 }, "11"], ["eng", { h: 130, bin: 1, blur: 2 }, "11"], ["eng", { h: 180, bin: 1, blur: 4 }, "11"], ["eng", { h: 130, blur: 2 }, "11"], ["eng", { h: 100 }, "7"], ["eng", { h: 120, adapt: 15, join: 1 }, "11"], ["eng", { h: 120, adapt: 15, join: 1 }, "6"], ["eng", { h: 160, adapt: 15, join: 2 }, "11"]]
     : [["mixed", { h: 100 }, "6"], ["mixed", { max: 1400 }, "6"], ["mixed", { h: 100 }, "11"]];
   let bestLines = [], bestScore = -1; const texts = [];
   for (let i = 0; i < plans.length; i++) {
     const [kind, o, psm] = plans[i];
     onStatus(`辨識中（${i + 1}/${plans.length}）…`, (i + 0.5) / plans.length);
     const w = await getOcrWorker(kind);
-    await w.setParameters({ tessedit_pageseg_mode: psm });
+    await w.setParameters({ tessedit_pageseg_mode: psm, tessedit_char_whitelist: kind === "eng" && mode === "date" ? "0123456789./-:年月日EXPBDLOTUSNIH " : "" });
     const { data } = await w.recognize(prepCanvas(img, r, o));
     texts.push(fixDigits(data.text || ""));
     if (kind === "mixed") {
@@ -1042,13 +1064,13 @@ function findDates(texts) {
   for (const text of texts) {
     const s = toHalf(fixDigits(text)).replace(/[ \t]+/g, ""); let m;
     const seen = new Set();
-    while ((m = re.exec(s))) { const p = parseToken(m[0]); if (p && !seen.has(p.date)) { seen.add(p.date); const e = tally.get(p.date) || { ...p, raw: m[0], n: 0 }; e.n++; tally.set(p.date, e); } }
+    while ((m = re.exec(s))) { if (/^[.\/\-:]?\d/.test(s.slice(m.index + m[0].length))) continue; const p = parseToken(m[0]); if (p && !seen.has(p.date)) { seen.add(p.date); const e = tally.get(p.date) || { ...p, raw: m[0], n: 0 }; e.n++; tally.set(p.date, e); } }
     if (!bestKw && /有效|到期|期限|賞味|EXP|BB|BEST|USE/i.test(s)) bestKw = parseDateText(s)?.date || null;
   }
   return [...tally.values()].sort((a, b) => (b.date === bestKw) - (a.date === bestKw) || b.n - a.n || (b.date > a.date ? 1 : -1));
 }
 function scanButton(mode, label, apply) {
-  const inp = h("input", { type: "file", accept: "image/*", capture: "environment", hidden: true });
+  const inp = h("input", { type: "file", accept: "image/*", hidden: true }); // 不指定 capture：iPhone 會讓使用者選「拍照」或「照片圖庫」
   inp.addEventListener("change", () => { const f = inp.files[0]; inp.value = ""; if (f) openScan(mode, label, f, apply, () => inp.click()); });
   const b = h("button", { type: "button", class: "scanbtn", "aria-label": "掃描" + label, onclick: () => inp.click() }, h("span", { svg: ICON.cam }), "掃描");
   return h("span", { style: "display:contents" }, b, inp);
@@ -1079,7 +1101,7 @@ async function openScan(mode, label, file, apply, retake) {
       h("div", { class: "note" }, h("b", null, "用手指在照片上拖曳，框住要辨識的文字。"), mode === "date" ? "只框日期那一行，準確度最高。" : "只框品名那一行，準確度最高。"),
       stage,
       h("button", { class: "btn block", onclick: run }, "辨識框選範圍"),
-      h("div", { class: "btn-row" }, h("button", { class: "btn ghost", onclick: () => { closeScan(); retake(); } }, h("span", { svg: ICON.cam }), "重拍"), h("button", { class: "btn ghost", onclick: closeScan }, "取消")));
+      h("div", { class: "btn-row" }, h("button", { class: "btn ghost", onclick: () => { closeScan(); retake(); } }, h("span", { svg: ICON.cam }), "換一張照片"), h("button", { class: "btn ghost", onclick: closeScan }, "取消")));
   }
 
   async function run() {
@@ -1089,7 +1111,7 @@ async function openScan(mode, label, file, apply, retake) {
     const bar = h("div", { class: "bar", hidden: true }, h("i"));
     const results = h("div", { style: "display:grid;gap:14px" });
     body.replaceChildren(preview, status, bar, results,
-      h("div", { class: "btn-row" }, h("button", { class: "btn ghost", onclick: drawCrop }, "重新框選"), h("button", { class: "btn ghost", onclick: () => { closeScan(); retake(); } }, h("span", { svg: ICON.cam }), "重拍")));
+      h("div", { class: "btn-row" }, h("button", { class: "btn ghost", onclick: drawCrop }, "重新框選"), h("button", { class: "btn ghost", onclick: () => { closeScan(); retake(); } }, h("span", { svg: ICON.cam }), "換一張照片")));
     const setStatus = (t, p) => { status.replaceChildren(h("span", { class: "spin" }), t); if (p == null) bar.hidden = true; else { bar.hidden = false; bar.firstChild.style.width = Math.round(p * 100) + "%"; } };
     let out;
     try { out = await ocrRegion(img, r, mode, setStatus); }
@@ -1242,6 +1264,7 @@ function renderHistory(v) {
 /* ============ 設定 ============ */
 function renderSettings(v) {
   const s = state.settings;
+  v.append(h("div", { class: "ver-line num" }, h("span", { class: "tag gold", text: "版本 " + APP_VERSION }), h("span", { text: `資料儲存：${storageMode === "idb" ? "裝置資料庫" : storageMode === "local" ? "瀏覽器儲存" : "暫存（不會保留）"}` })));
   // 提醒時間
   v.append(h("div", { class: "sec-title" }, h("h2", { text: "提醒時間" })));
   const ah = selectEl(Array.from({ length: 17 }, (_, i) => `${pad(i + 6)}:00`), `${pad(s.alarmHour)}:00`); ah.id = "set-ah";
@@ -1322,7 +1345,7 @@ function renderSettings(v) {
     h("div", { class: "btn-row" },
       h("button", { class: "btn ghost", onclick: exportBackup }, "匯出備份"),
       h("button", { class: "btn ghost", onclick: () => file.click() }, "匯入備份")), file,
-    h("div", { class: "help", style: "font-size:15px;color:var(--ink-2)", text: `儲存方式：${storageMode === "idb" ? "裝置資料庫" : storageMode === "local" ? "瀏覽器儲存" : "暫存（不會保留）"}・版本 ${APP_VERSION}` })));
+    ));
   const hasEx = state.items.some(i => i.note === "範例資料");
   v.append(h("div", { style: "display:grid;gap:10px;margin-top:16px" },
     hasEx ? armedDelete(async () => { state.items = state.items.filter(i => i.note !== "範例資料"); await saveState(); render(); toast("已清除範例資料"); }, "清除範例資料") : null,
