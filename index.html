@@ -41,6 +41,22 @@
   --ok:#86C9A8; --ok-bg:#1B3128; --info-bg:#1D2F2E; --backdrop:rgba(0,0,0,.6);
   color-scheme:dark;
 }
+
+/* 主題色系：coral 珊瑚粉（未指定時為原版深藍綠） */
+:root[data-palette="coral"]{--bg:#FFF8F8; --surface:#FFFFFF; --surface-2:#F9E2E2; --ink:#4A2E2B; --ink-2:#8A625D; --primary:#B8554A; --accent:#E07565; --btn:#D0655A; --on-btn:#FFFFFF; --gold:#EBB2AC; --gold-deep:#C0584C; --line:#F3DAD7; --line-strong:#EBB2AC; --info-bg:#F9E2E2; --week:#8A625D;}
+@media (prefers-color-scheme:dark){:root[data-palette="coral"]:not([data-theme="light"]){--bg:#1C1414; --surface:#261B1B; --surface-2:#312222; --ink:#F7E6E4; --ink-2:#C3A19C; --primary:#F4A397; --accent:#EE8778; --btn:#C25A4D; --on-btn:#FFFFFF; --gold:#EBB2AC; --gold-deep:#F4B3A8; --line:#3D2B2A; --line-strong:#5A3D3A; --info-bg:#3A2524; --week:#C3A19C;}}
+:root[data-palette="coral"][data-theme="dark"]{--bg:#1C1414; --surface:#261B1B; --surface-2:#312222; --ink:#F7E6E4; --ink-2:#C3A19C; --primary:#F4A397; --accent:#EE8778; --btn:#C25A4D; --on-btn:#FFFFFF; --gold:#EBB2AC; --gold-deep:#F4B3A8; --line:#3D2B2A; --line-strong:#5A3D3A; --info-bg:#3A2524; --week:#C3A19C;}
+:root[data-palette="rose"]{--bg:#FBF7F6; --surface:#FFFFFF; --surface-2:#F5EDEC; --ink:#43302F; --ink-2:#7D6663; --primary:#7B3F4E; --accent:#B06A7A; --btn:#7B3F4E; --on-btn:#FFFFFF; --line:#EBDDDB; --line-strong:#DCC7C4; --info-bg:#F6E9EA; --week:#7D6663;}
+@media (prefers-color-scheme:dark){:root[data-palette="rose"]:not([data-theme="light"]){--bg:#1A1314; --surface:#231A1B; --surface-2:#2C2122; --ink:#F1E4E3; --ink-2:#B9A09E; --primary:#E6B3BE; --accent:#D28E9C; --btn:#9A4E60; --on-btn:#FFFFFF; --line:#3A2C2D; --line-strong:#4B3839; --info-bg:#33242A; --week:#B9A09E;}}
+:root[data-palette="rose"][data-theme="dark"]{--bg:#1A1314; --surface:#231A1B; --surface-2:#2C2122; --ink:#F1E4E3; --ink-2:#B9A09E; --primary:#E6B3BE; --accent:#D28E9C; --btn:#9A4E60; --on-btn:#FFFFFF; --line:#3A2C2D; --line-strong:#4B3839; --info-bg:#33242A; --week:#B9A09E;}
+:root[data-palette="lavender"]{--bg:#F9F8FB; --surface:#FFFFFF; --surface-2:#F0EEF5; --ink:#34304A; --ink-2:#6F6A85; --primary:#4F4577; --accent:#7D71AE; --btn:#4F4577; --on-btn:#FFFFFF; --line:#E3E0EC; --line-strong:#D2CDE0; --info-bg:#ECE9F5;}
+@media (prefers-color-scheme:dark){:root[data-palette="lavender"]:not([data-theme="light"]){--bg:#14131B; --surface:#1D1B26; --surface-2:#252330; --ink:#E8E6F2; --ink-2:#A7A2BE; --primary:#C4BAF0; --accent:#A597DE; --btn:#6456A0; --on-btn:#FFFFFF; --line:#312E40; --line-strong:#403C52; --info-bg:#272338;}}
+:root[data-palette="lavender"][data-theme="dark"]{--bg:#14131B; --surface:#1D1B26; --surface-2:#252330; --ink:#E8E6F2; --ink-2:#A7A2BE; --primary:#C4BAF0; --accent:#A597DE; --btn:#6456A0; --on-btn:#FFFFFF; --line:#312E40; --line-strong:#403C52; --info-bg:#272338;}
+.pal-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.pal{display:grid;gap:8px;justify-items:start;text-align:left;border:1px solid var(--line-strong);background:var(--surface);border-radius:var(--r-sm);padding:12px;font-size:16px;color:var(--ink);min-width:0}
+.pal[aria-pressed="true"]{border-color:var(--primary);box-shadow:inset 0 0 0 1px var(--primary);font-weight:700}
+.pal .dots{display:flex;gap:4px}
+.pal .dots i{width:20px;height:20px;border-radius:50%;border:1px solid rgba(0,0,0,.08)}
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:18px;line-height:1.55;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
@@ -69,7 +85,7 @@ button{cursor:pointer}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 10px;display:grid;gap:2px;text-align:left;min-width:0}
 .stat .k{font-size:14.5px;color:var(--ink-2);white-space:nowrap}
 .stat .v{font-size:28px;font-weight:700;line-height:1.15}
-.stat.expired .v{color:var(--danger)} .stat.soon .v{color:var(--warn)} .stat.week .v{color:var(--accent)} .stat.all .v{color:var(--primary)}
+.stat.expired .v{color:var(--danger)} .stat.soon .v{color:var(--warn)} .stat.week .v{color:var(--week,var(--accent))} .stat.all .v{color:var(--primary)}
 .stat[aria-pressed="true"]{border-color:var(--primary);box-shadow:inset 0 0 0 1px var(--primary)}
 @media (max-width:380px){.summary{grid-template-columns:repeat(2,1fr)}}
 
@@ -99,7 +115,7 @@ button{cursor:pointer}
 .days small{font-size:13px;margin-top:2px}
 .u-expired{background:var(--danger-bg);color:var(--danger)}
 .u-soon{background:var(--warn-bg);color:var(--warn)}
-.u-week{background:var(--info-bg);color:var(--accent)}
+.u-week{background:var(--info-bg);color:var(--week,var(--accent))}
 .u-ok{background:var(--ok-bg);color:var(--ok)}
 .u-none{background:var(--surface-2);color:var(--ink-2)}
 .row .main{min-width:0}
@@ -269,7 +285,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <script>
 "use strict";
 /* ============ 常數與預設 ============ */
-const APP_VERSION = "1.2.6";
+const APP_VERSION = "1.3.0";
 const LOCS = ["冷藏","冷凍","常溫"];
 const ITEM_GROUPS = [
   ["生鮮食材", ["葉菜類","根莖瓜果","水果","肉類","海鮮","蛋","豆製品","乳製品","熟食剩菜","麵包烘焙"]],
@@ -297,8 +313,20 @@ const LEGACY_CATS = { "保健藥品": "藥品", "日用品": "其他日用品" }
 const DEFAULT_SETTINGS = {
   alarmHour: 9, rulesVersion: RULES_VERSION,
   rules: DEFAULT_RULES, subRules: DEFAULT_SUB_RULES,
-  ai: { key: "", model: "gemini-flash-latest" }
+  ai: { key: "", model: "gemini-flash-latest" },
+  palette: "teal"
 };
+const PALETTES = [
+  { id: "teal", name: "深藍綠", note: "原版", colors: ["#0D3B3E", "#2E7D7D", "#C9A961", "#FAF8F3"], meta: "#0D3B3E" },
+  { id: "coral", name: "珊瑚粉", note: "女版・範本配色", colors: ["#EE8778", "#EBB2AC", "#F9E2E2", "#FFF8F8"], meta: "#EE8778" },
+  { id: "rose", name: "玫瑰霧", note: "乾燥玫瑰", colors: ["#7B3F4E", "#B06A7A", "#C9A961", "#FBF7F6"], meta: "#7B3F4E" },
+  { id: "lavender", name: "薰衣草灰", note: "灰紫", colors: ["#4F4577", "#7D71AE", "#C9A961", "#F9F8FB"], meta: "#4F4577" }
+];
+function applyPalette(id) {
+  const p = PALETTES.find(x => x.id === id) || PALETTES[0];
+  if (p.id === "teal") delete document.documentElement.dataset.palette; else document.documentElement.dataset.palette = p.id;
+  const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content", p.meta);
+}
 const STATUS_LABEL = { used:"已用完", discarded:"已丟棄", cancelled:"已取消" };
 
 /* ============ 狀態 ============ */
@@ -555,7 +583,7 @@ function renderOverview(v, active) {
     if (!rows.length) { listHost.append(h("div", { class: "note", style: "margin-top:16px", text: "沒有符合條件的項目。" })); return; }
 
     const groups = [
-      ["expired", "已過期", "var(--danger)"], ["soon", "3 天內到期", "var(--warn)"], ["week", "7 天內到期", "var(--accent)"],
+      ["expired", "已過期", "var(--danger)"], ["soon", "3 天內到期", "var(--warn)"], ["week", "7 天內到期", "var(--week,var(--accent))"],
       ["ok", "7 天以後", "var(--ok)"], ["none", "尚未填日期", "var(--ink-2)"]
     ];
     for (const [key, label, color] of groups) {
@@ -847,7 +875,7 @@ document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; if
 /* ============ 新增 ============ */
 function openAddSheet() {
   const hasAI = !!state.settings.ai.key;
-  const modes = [["manual", "手動輸入"], ["paste", "貼上匯入"]];
+  const modes = [["manual", "手動輸入"], ["paste", "AI貼上匯入"]];
   if (hasAI) modes.push(["photo", "拍照辨識"]);
   let mode = "manual";
   const content = h("div", { style: "display:grid;gap:14px" });
@@ -1256,17 +1284,41 @@ function armedDelete(fn, label = "刪除此筆") {
   return b;
 }
 // 找出與現有追蹤中項目「同名＋同到期日」的草稿
+// 品名正規化：去掉括號內容、空白、標點，英文轉小寫
+function normName(n) {
+  return String(n || "").toLowerCase().replace(/[（(【\[].*?[）)】\]]/g, "").replace(/[\s'’`"“”.,，。、:：;；!！?？\-_/·・&＋+]/g, "");
+}
+function bigrams(s) { const a = []; for (let i = 0; i < s.length - 1; i++) a.push(s.slice(i, i + 2)); return a; }
+function nameSimilar(a, b) {
+  const x = normName(a), y = normName(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  if (short.length >= 3 && long.includes(short)) return true; // 一個品名包含另一個
+  let p = 0; while (p < short.length && short[p] === long[p]) p++;
+  if (p >= 6 || (p >= 3 && p / short.length >= 0.6)) return true; // 開頭大部分相同
+  const A = bigrams(x), B = bigrams(y); if (!A.length || !B.length) return false;
+  const pool = [...B]; let hit = 0;
+  for (const g of A) { const k = pool.indexOf(g); if (k >= 0) { hit++; pool.splice(k, 1); } }
+  return (2 * hit) / (A.length + B.length) >= 0.6; // 字詞相似度
+}
+// 找出與現有追蹤中項目「到期日相同＋品名相近」的草稿
 function findDupes(drafts) {
-  const key = (n, e) => String(n || "").trim().toLowerCase() + "|" + e;
-  const have = new Set(state.items.filter(i => i.status === "active").map(i => key(i.name, i.expiry)));
-  return drafts.filter(d => have.has(key(d.name, d.expiry))).map(d => String(d.name).trim());
+  const active = state.items.filter(i => i.status === "active");
+  const out = [];
+  for (const d of drafts) {
+    const m = active.find(i => i.expiry === d.expiry && nameSimilar(i.name, d.name));
+    if (m) out.push({ name: String(d.name).trim(), existing: m.name });
+  }
+  return out;
 }
 // 儲存前的重複確認：第一次按顯示提醒，再按一次才新增
 function dupeGuard(btn, noteHost, drafts, label) {
   const dupes = findDupes(drafts);
   if (!dupes.length || btn.dataset.confirmed === "1") return true;
   btn.dataset.confirmed = "1"; btn.textContent = "仍要新增";
-  noteHost.replaceChildren(h("div", { class: "banner" }, h("b", null, "已有相同項目："), `${[...new Set(dupes)].join("、")}（同名且到期日相同）。確定要再新增，請再按一次「仍要新增」；不需要的話可關閉此畫面。`));
+  const lines = dupes.map(x => x.name === x.existing ? `「${x.name}」` : `「${x.name}」與現有的「${x.existing}」`);
+  noteHost.replaceChildren(h("div", { class: "banner" }, h("b", null, "可能已有相同項目："), `${lines.join("、")}，到期日相同、品名相近。確定要再新增，請再按一次「仍要新增」；不需要的話可關閉此畫面。`));
   noteHost.scrollIntoView({ behavior: "smooth", block: "center" });
   return false;
 }
@@ -1299,6 +1351,9 @@ function renderHistory(v) {
 function renderSettings(v) {
   const s = state.settings;
   v.append(h("div", { class: "ver-line num" }, h("span", { class: "tag gold", text: "版本 " + APP_VERSION }), h("span", { text: `資料儲存：${storageMode === "idb" ? "裝置資料庫" : storageMode === "local" ? "瀏覽器儲存" : "暫存（不會保留）"}` })));
+  v.append(h("div", { class: "sec-title" }, h("h2", { text: "主題色系" })));
+  v.append(h("div", { class: "pal-grid", role: "group", "aria-label": "主題色系" }, PALETTES.map(p => h("button", { class: "pal", "aria-pressed": String((s.palette || "teal") === p.id), onclick: async () => { s.palette = p.id; applyPalette(p.id); await saveState(); render(); toast("已切換為「" + p.name + "」"); } },
+    h("span", { class: "dots" }, p.colors.map(c => h("i", { style: `background:${c}` }))), h("span", { text: p.name }), h("small", { style: "color:var(--ink-2);font-size:14px;font-weight:400", text: p.note })))));
   // 提醒時間
   v.append(h("div", { class: "sec-title" }, h("h2", { text: "提醒時間" })));
   const ah = selectEl(Array.from({ length: 17 }, (_, i) => `${pad(i + 6)}:00`), `${pad(s.alarmHour)}:00`); ah.id = "set-ah";
@@ -1371,7 +1426,7 @@ function renderSettings(v) {
       const map = new Map(state.items.map(i => [i.id, i]));
       let n = 0; for (const it of data.items) { if (it && it.id && it.name) { map.set(it.id, it); n++; } }
       state.items = [...map.values()];
-      if (data.settings) { const k = state.settings.ai; state.settings = mergeSettings(data.settings); state.settings.ai = k; }
+      if (data.settings) { const k = state.settings.ai; state.settings = mergeSettings(data.settings); state.settings.ai = k; applyPalette(state.settings.palette); }
       await saveState(); render(); toast(`已匯入 ${n} 筆資料`);
     } catch (e) { toast("檔案格式不正確，請選擇效期管家匯出的備份檔"); }
   });
@@ -1445,6 +1500,7 @@ function exportBackup() {
     state.items = saved.items.map(i => LEGACY_CATS[i.category] ? { ...i, category: LEGACY_CATS[i.category] } : i);
     state.settings = mergeSettings(saved.settings);
   }
+  applyPalette(state.settings.palette);
   if (window.__PREVIEW__ && !state.items.length) await loadExamples();
   render();
   try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch (e) {}
