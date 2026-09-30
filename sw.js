@@ -1,5 +1,5 @@
 // 效期管家 Service Worker：離線可用。更新版本時請修改 CACHE 名稱。
-const CACHE = "expiry-keeper-v1.2.2";
+const CACHE = "expiry-keeper-v1.2.3";
 const LIB_CACHE = "expiry-keeper-lib-v1"; // 文字辨識程式庫（版本固定，長期快取）
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
