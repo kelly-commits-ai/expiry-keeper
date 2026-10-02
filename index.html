@@ -300,7 +300,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <script>
 "use strict";
 /* ============ 常數與預設 ============ */
-const APP_VERSION = "1.5.2";
+const APP_VERSION = "1.5.3";
 const LOCS = ["冷藏","冷凍","常溫"];
 const ITEM_GROUPS = [
   ["生鮮食材", ["葉菜類","根莖瓜果","水果","肉類","海鮮","蛋","豆製品","乳製品","熟食剩菜","麵包烘焙"]],
@@ -1415,13 +1415,15 @@ function renderHistory(v) {
   v.append(h("div", { class: "sec-title" }, h("h2", { text: "本月統計" }), h("span", { class: "hint num", text: ym.replace("-", " 年 ") + " 月" })));
   const tile = (k, n, cls) => h("div", { class: "stat " + cls }, h("span", { class: "k", text: k }), h("span", { class: "v num", text: n }));
   v.append(h("div", { class: "hist-stats" }, tile("已用完", c("used"), "all"), tile("已丟棄", c("discarded"), "expired"), tile("已取消訂閱", c("cancelled"), "week")));
-  const disc = closed.filter(i => i.status === "discarded");
-  if (disc.length) {
-    const byCat = {}; disc.forEach(i => byCat[i.category] = (byCat[i.category] || 0) + 1);
-    const top = Object.entries(byCat).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => `${k} ${n} 次`).join("、");
-    v.append(h("div", { class: "note", style: "margin-top:10px" }, h("b", null, "最常丟棄："), top));
-  }
+  // 最常丟棄：本月與歷來分開列出
+  const topDiscards = (list) => {
+    const byCat = {}; list.filter(i => i.status === "discarded").forEach(i => byCat[i.category] = (byCat[i.category] || 0) + 1);
+    return Object.entries(byCat).sort((x, y) => y[1] - x[1]).slice(0, 3).map(([k, n]) => `${k} ${n} 次`).join("、");
+  };
+  v.append(h("div", { class: "note", style: "margin-top:10px" }, h("b", null, "本月最常丟棄："), topDiscards(thisMonth) || "本月沒有丟棄紀錄"));
   v.append(h("div", { class: "sec-title" }, h("h2", { text: "歷史紀錄" }), h("span", { class: "hint num", text: `共 ${closed.length} 筆` })));
+  const allTop = topDiscards(closed);
+  if (allTop) v.append(h("div", { class: "note", style: "margin-bottom:10px" }, h("b", null, "歷來最常丟棄："), allTop));
   if (!closed.length) { v.append(h("div", { class: "note", text: "標記為「已用完」「已丟棄」或「已取消訂閱」的項目會出現在這裡。" })); return; }
   v.append(h("div", { class: "list" }, closed.slice(0, 300).map(i => h("div", { class: "hrow" },
     h("div", { style: "min-width:0" }, h("div", { class: "name", text: i.name }),
