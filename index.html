@@ -218,6 +218,8 @@ button{cursor:pointer}
 .hrow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid var(--line)}
 .hrow:first-child{border-top:0}
 .hrow .name{font-weight:600}
+.hact{display:flex;gap:6px;flex:none}
+.hact .btn{padding:0 12px;min-width:60px}
 .hrow .meta{font-size:15px;color:var(--ink-2)}
 
 /* Settings table */
@@ -298,7 +300,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <script>
 "use strict";
 /* ============ 常數與預設 ============ */
-const APP_VERSION = "1.5.1";
+const APP_VERSION = "1.5.2";
 const LOCS = ["冷藏","冷凍","常溫"];
 const ITEM_GROUPS = [
   ["生鮮食材", ["葉菜類","根莖瓜果","水果","肉類","海鮮","蛋","豆製品","乳製品","熟食剩菜","麵包烘焙"]],
@@ -1346,6 +1348,15 @@ function openCalPicker(items) {
     h("div", { class: "cp-go" }, go)]);
   sync();
 }
+// 紀錄頁的刪除：第一次按變成「確定？」，3.5 秒內再按一次才刪除
+function histDelete(it) {
+  let armed = false, t;
+  const b = h("button", { class: "btn danger sm", "aria-label": `刪除 ${it.name}`, onclick: async () => {
+    if (!armed) { armed = true; b.classList.add("armed"); b.textContent = "確定？"; t = setTimeout(() => { armed = false; b.classList.remove("armed"); b.textContent = "刪除"; }, 3500); return; }
+    clearTimeout(t); state.items = state.items.filter(x => x.id !== it.id); await saveState(); render(); toast("已刪除");
+  } }, "刪除");
+  return b;
+}
 function armedDelete(fn, label = "刪除此筆") {
   let armed = false, t;
   const b = h("button", { class: "btn danger block", onclick: () => {
@@ -1415,7 +1426,9 @@ function renderHistory(v) {
   v.append(h("div", { class: "list" }, closed.slice(0, 300).map(i => h("div", { class: "hrow" },
     h("div", { style: "min-width:0" }, h("div", { class: "name", text: i.name }),
       h("div", { class: "meta num", text: `${STATUS_LABEL[i.status]}・${i.closedAt ? shortDate(i.closedAt) : ""}・${i.category}${i.expiry ? "・原到期 " + shortDate(i.expiry) : ""}` })),
-    h("button", { class: "btn ghost sm", onclick: async () => { i.status = "active"; i.closedAt = ""; await saveState(); render(); toast("已移回追蹤中"); } }, "移回")))));
+    h("div", { class: "hact" },
+      h("button", { class: "btn ghost sm", onclick: async () => { i.status = "active"; i.closedAt = ""; await saveState(); render(); toast("已移回追蹤中"); } }, "移回"),
+      histDelete(i))))));
 }
 
 /* ============ 設定 ============ */
