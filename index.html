@@ -300,7 +300,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <script>
 "use strict";
 /* ============ 常數與預設 ============ */
-const APP_VERSION = "1.5.3";
+const APP_VERSION = "1.6.0";
 const LOCS = ["冷藏","冷凍","常溫"];
 const ITEM_GROUPS = [
   ["生鮮食材", ["葉菜類","根莖瓜果","水果","肉類","海鮮","蛋","豆製品","乳製品","熟食剩菜","麵包烘焙"]],
@@ -479,29 +479,32 @@ function openIDB() {
     r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
   });
 }
+// 雙重保存：IndexedDB 為主、localStorage 為鏡像；讀取時採用較新的一份，避免單一儲存區暫時失效時誤讀到空資料
+function idbRead() {
+  return openIDB().then(db => new Promise((res, rej) => { const q = db.transaction(STORE).objectStore(STORE).get("state"); q.onsuccess = () => res(q.result || null); q.onerror = () => rej(q.error); }));
+}
+function idbWrite(data) {
+  return openIDB().then(db => new Promise((res, rej) => { const tx = db.transaction(STORE, "readwrite"); tx.objectStore(STORE).put(data, "state"); tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); }));
+}
 async function loadState() {
-  try {
-    const db = await openIDB();
-    const v = await new Promise((res, rej) => { const q = db.transaction(STORE).objectStore(STORE).get("state"); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
-    storageMode = "idb"; return v || null;
-  } catch (e) {
-    try { const v = localStorage.getItem(DB_NAME); storageMode = "local"; return v ? JSON.parse(v) : null; }
-    catch (e2) { storageMode = "memory"; return null; }
-  }
+  let a = null, b = null, idbOk = false, lsOk = false;
+  try { a = await idbRead(); idbOk = true; } catch (e) {}
+  try { const v = localStorage.getItem(DB_NAME); b = v ? JSON.parse(v) : null; lsOk = true; } catch (e) {}
+  storageMode = idbOk ? "idb" : lsOk ? "local" : "memory";
+  if (!a || !b) return a || b;
+  const ta = a.savedAt || 0, tb = b.savedAt || 0;
+  if (ta !== tb) return ta > tb ? a : b;
+  return (b.items || []).length > (a.items || []).length ? b : a;
 }
 async function saveState() {
+  state.savedAt = Date.now();
   const data = JSON.parse(JSON.stringify(state));
-  if (storageMode === "idb") {
-    try {
-      const db = await openIDB();
-      await new Promise((res, rej) => { const tx = db.transaction(STORE, "readwrite"); tx.objectStore(STORE).put(data, "state"); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
-      return;
-    } catch (e) { storageMode = "local"; }
-  }
-  if (storageMode === "local") {
-    try { localStorage.setItem(DB_NAME, JSON.stringify(data)); return; } catch (e) { storageMode = "memory"; }
-  }
-  renderBanner();
+  let idbOk = false, lsOk = false;
+  try { await idbWrite(data); idbOk = true; } catch (e) {}
+  try { localStorage.setItem(DB_NAME, JSON.stringify(data)); lsOk = true; } catch (e) {}
+  const mode = idbOk ? "idb" : lsOk ? "local" : "memory";
+  if (mode !== storageMode) { storageMode = mode; renderBanner(); }
+  return idbOk || lsOk;
 }
 function mergeSettings(s) {
   const out = structuredClone(DEFAULT_SETTINGS);
@@ -526,7 +529,16 @@ function toast(msg, ms = 2600) {
 }
 function renderBanner() {
   const slot = $("#banner-slot"); slot.replaceChildren();
-  if (storageMode === "memory") slot.append(h("div", { class: "banner", text: IS_ANDROID ? "此瀏覽器無法儲存資料，關閉頁面後資料會消失。請用 Chrome 開啟並「安裝應用程式」後使用。" : "此瀏覽器無法儲存資料，關閉頁面後資料會消失。請用 Safari 開啟並「加入主畫面」後使用。" }));
+  if (storageMode === "memory") { slot.append(h("div", { class: "banner", text: IS_ANDROID ? "此瀏覽器無法儲存資料，關閉頁面後資料會消失。請用 Chrome 開啟並「安裝應用程式」後使用。" : "此瀏覽器無法儲存資料，關閉頁面後資料會消失。請用 Safari 開啟並「加入主畫面」後使用。" })); return; }
+  // 手機上不是從主畫面圖示開啟：資料與主畫面 App 分開保存，且可能被瀏覽器清除（設定頁另有安裝說明）
+  if (!IS_STANDALONE && !window.__PREVIEW__ && (IS_IOS || IS_ANDROID) && ui.tab !== "settings") {
+    const inApp = /Line\/|FBAN|FBAV|Instagram/i.test(navigator.userAgent);
+    const steps = inApp
+      ? (IS_ANDROID ? "請點右上角「⋮」→「以其他應用程式開啟」選 Chrome，再「安裝應用程式」。" : "請點右下角「⋯」→「以預設瀏覽器開啟」，在 Safari 中「分享」→「加入主畫面」。")
+      : (IS_ANDROID ? "請點右上角「⋮」→「安裝應用程式」，之後都從主畫面圖示開啟。" : "請點下方「分享」→「加入主畫面」，之後都從主畫面圖示開啟。");
+    slot.append(h("div", { class: "banner", style: "margin-bottom:14px" }, h("b", null, "目前不是從主畫面圖示開啟。"),
+      `在這裡輸入的資料與主畫面 App 分開保存，${IS_IOS ? "且 Safari 可能在 7 天未開啟後自動清除。" : "且可能被瀏覽器清除。"}` + steps));
+  }
 }
 
 /* ============ 圖示 ============ */
@@ -572,6 +584,13 @@ function renderOverview(v, active) {
     statBtn("week", "7 天內", cnt.week), statBtn("all", "追蹤中", active.length)));
 
   if (!state.items.length) { v.append(emptyState()); return; }
+  const lb = state.settings.lastBackupAt;
+  const lbDays = lb ? Math.floor((Date.now() - new Date(lb).getTime()) / 86400000) : null;
+  if (active.length >= 5 && (lbDays == null || lbDays > 30)) {
+    v.append(h("div", { class: "banner", style: "margin-bottom:14px" }, h("b", null, lbDays == null ? "尚未備份過。" : `距上次備份已 ${lbDays} 天。`),
+      `目前有 ${active.length} 筆追蹤中的資料，只存在這支手機。建議匯出備份存到「檔案」或雲端硬碟，換手機或資料遺失時才能還原。`,
+      h("div", { style: "margin-top:8px" }, h("button", { class: "btn sm", onclick: exportBackup }, "立即備份"))));
+  }
 
   // 依存放位置篩選後，列出目前有項目的類別（含筆數）
   const byLoc = (i) => ui.loc === "全部" ? true : ui.loc === "訂閱項目" ? i.kind === "sub" : (i.kind === "item" && i.location === ui.loc);
@@ -1486,10 +1505,28 @@ function renderSettings(v) {
   const key = h("input", { type: "password", id: "set-key", autocomplete: "off", value: s.ai.key, placeholder: "貼上 Gemini API 金鑰" });
   const model = h("select", { id: "set-model" }, h("option", { value: s.ai.model, text: s.ai.model }));
   const aiStatus = h("div", { class: "help" });
-  key.addEventListener("change", async () => { s.ai.key = key.value.trim(); await saveState(); aiHint.textContent = s.ai.key ? "已啟用" : "未啟用"; if (s.ai.key) { ui.keyHint = false; const bn = key.closest(".card").querySelector(".banner"); if (bn) bn.remove(); } aiStatus.className = "help"; aiStatus.textContent = s.ai.key ? "金鑰已儲存，建議按「測試連線」確認" : "已移除金鑰"; });
+  // 貼上或輸入後自動儲存，並顯示儲存結果
+  if (s.ai.key) { aiStatus.className = "help ok"; aiStatus.textContent = "金鑰已儲存在這支手機"; }
+  const saveKey = async () => {
+    const val = key.value.trim();
+    if (val === s.ai.key) return true;
+    s.ai.key = val;
+    const ok = await saveState();
+    aiHint.textContent = s.ai.key ? "已啟用" : "未啟用";
+    if (s.ai.key) { ui.keyHint = false; const bn = key.closest(".card").querySelector(".banner"); if (bn) bn.remove(); }
+    if (!ok) { aiStatus.className = "help bad"; aiStatus.textContent = "無法儲存：此瀏覽器不能保存資料，請從主畫面圖示開啟"; return false; }
+    aiStatus.className = s.ai.key ? "help ok" : "help";
+    aiStatus.textContent = s.ai.key ? "金鑰已儲存，請按「儲存並測試連線」確認可用" : "已移除金鑰";
+    return true;
+  };
+  let keyTimer;
+  key.addEventListener("input", () => { clearTimeout(keyTimer); aiStatus.className = "help"; aiStatus.textContent = "儲存中…"; keyTimer = setTimeout(saveKey, 500); });
+  key.addEventListener("change", () => { clearTimeout(keyTimer); saveKey(); });
   model.addEventListener("change", async () => { s.ai.model = model.value; await saveState(); toast("已切換模型"); });
   const test = h("button", { class: "btn ghost sm", onclick: async () => {
-    if (!s.ai.key) return toast("請先貼上金鑰");
+    clearTimeout(keyTimer);
+    if (!(await saveKey())) return;
+    if (!s.ai.key) { aiStatus.className = "help bad"; aiStatus.textContent = "請先貼上金鑰"; return; }
     aiStatus.className = "help"; aiStatus.textContent = "連線中…";
     try {
       const list = await geminiModels();
@@ -1497,16 +1534,16 @@ function renderSettings(v) {
       const opts = ["gemini-flash-latest", ...list.filter(n => n !== "gemini-flash-latest")];
       model.replaceChildren(...opts.map(n => h("option", { value: n, text: n })));
       model.value = opts.includes(s.ai.model) ? s.ai.model : opts[0]; s.ai.model = model.value; await saveState();
-      aiStatus.className = "help ok"; aiStatus.textContent = `連線成功，共 ${list.length} 個可用模型`;
-    } catch (e) { aiStatus.className = "help bad"; aiStatus.textContent = e.friendly || "連線失敗"; }
-  } }, "測試連線並取得可用模型");
+      aiStatus.className = "help ok"; aiStatus.textContent = `金鑰已儲存，連線成功（共 ${list.length} 個可用模型）`;
+    } catch (e) { aiStatus.className = "help bad"; aiStatus.textContent = "金鑰已儲存，但連線失敗：" + (e.friendly || "請確認金鑰是否正確"); }
+  } }, "儲存並測試連線");
   v.append(h("div", { class: "card" },
     ui.keyHint && !s.ai.key ? h("div", { class: "banner", style: "margin-top:0" }, h("b", null, "備份不含 Gemini 金鑰。"), "資料已還原；如需拍照辨識與日期掃描，請在下方重新貼上金鑰（可到 Google AI Studio 複製原本那組）。") : null,
     h("div", { class: "note" }, "填入免費的 Google Gemini 金鑰後，「新增」會出現「拍照辨識」。金鑰只存在這支手機，不會上傳，也不會包含在備份檔中。"),
     h("ol", { class: "steps" },
       h("li", null, h("span", { class: "badge", text: "01" }), h("span", null, "用 Google 帳號登入 ", h("a", { href: "https://aistudio.google.com/apikey", target: "_blank", rel: "noopener", text: "Google AI Studio" }), "。")),
       h("li", null, h("span", { class: "badge", text: "02" }), h("span", null, "按「Create API key」建立金鑰並複製。")),
-      h("li", null, h("span", { class: "badge", text: "03" }), h("span", null, "貼到下方欄位，按「測試連線」。"))),
+      h("li", null, h("span", { class: "badge", text: "03" }), h("span", null, "貼到下方欄位（會自動儲存），再按「儲存並測試連線」。"))),
     h("div", { class: "form" }, field("API 金鑰", key, { full: true, help: aiStatus }), field("模型", model, { full: true })),
     h("div", { class: "btn-row" }, test)));
 
@@ -1521,7 +1558,7 @@ function renderSettings(v) {
       const map = new Map(state.items.map(i => [i.id, i]));
       let n = 0; for (const it of data.items) { if (it && it.id && it.name) { map.set(it.id, it); n++; } }
       state.items = [...map.values()];
-      if (data.settings) { const k = state.settings.ai; state.settings = mergeSettings(data.settings); state.settings.ai = k; applyPalette(state.settings.palette); }
+      if (data.settings) { const k = state.settings.ai, lb = state.settings.lastBackupAt; state.settings = mergeSettings(data.settings); state.settings.ai = k; state.settings.lastBackupAt = lb; applyPalette(state.settings.palette); }
       ui.keyHint = !state.settings.ai.key; // 備份不含金鑰：提醒重新貼上
       await saveState(); render();
       if (ui.keyHint) { toast(`已匯入 ${n} 筆資料。備份不含 Gemini 金鑰，請重新貼上`, 5000); const k = document.getElementById("set-key"); if (k) k.closest(".card").scrollIntoView({ behavior: "smooth", block: "center" }); }
@@ -1530,6 +1567,7 @@ function renderSettings(v) {
   });
   v.append(h("div", { class: "card" },
     h("div", { class: "note" }, "資料只存在這支手機。建議每月匯出一次備份存到「檔案」或雲端硬碟；換手機時用「匯入備份」還原。"),
+    h("div", { class: "num", style: "margin-top:6px;font-size:14.5px;color:var(--ink-2)", text: s.lastBackupAt ? `上次備份：${(d => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`)(new Date(s.lastBackupAt))}` : "尚未備份過" }),
     h("div", { class: "btn-row" },
       h("button", { class: "btn ghost", onclick: exportBackup }, "匯出備份"),
       h("button", { class: "btn ghost", onclick: () => file.click() }, "匯入備份")), file,
@@ -1565,16 +1603,17 @@ async function deliverFile(name, text, mime) {
     // iOS：以 Safari 開啟 .ics 會直接出現「加入行事曆」畫面
     const url = URL.createObjectURL(blob);
     const a = h("a", { href: url, download: name }); document.body.append(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60000); return;
+    setTimeout(() => URL.revokeObjectURL(url), 60000); return true;
   }
   const f = new File([blob], name, { type: mime });
   // iPhone 備份檔、Android 的 .ics 與備份檔：優先用分享選單（Android 可直接選日曆 App 開啟）
   if ((isIOS || IS_ANDROID) && navigator.canShare && navigator.canShare({ files: [f] })) {
-    try { await navigator.share({ files: [f], title: name }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+    try { await navigator.share({ files: [f], title: name }); return true; } catch (e) { if (e && e.name === "AbortError") return false; }
   }
   const url = URL.createObjectURL(blob);
   const a = h("a", { href: url, download: name }); document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return true;
 }
 function icsEscape(s) { return String(s || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/([,;])/g, "\\$1"); }
 function icsFold(line) {
@@ -1604,9 +1643,11 @@ function buildICS(items, hour = state.settings.alarmHour) {
   return L.map(icsFold).join("\r\n") + "\r\n";
 }
 function exportICS(items, name) { deliverFile(name, buildICS(items), "text/calendar"); }
-function exportBackup() {
-  const data = { app: "expiry-keeper", version: 1, exportedAt: new Date().toISOString(), items: state.items, settings: { ...state.settings, ai: { key: "", model: state.settings.ai.model } } };
-  deliverFile(`效期管家備份-${today()}.json`, JSON.stringify(data, null, 2), "application/json");
+async function exportBackup() {
+  const { lastBackupAt, ...rest } = state.settings;
+  const data = { app: "expiry-keeper", version: 1, exportedAt: new Date().toISOString(), items: state.items, settings: { ...rest, ai: { key: "", model: state.settings.ai.model } } };
+  const done = await deliverFile(`效期管家備份-${today()}.json`, JSON.stringify(data, null, 2), "application/json");
+  if (done) { state.settings.lastBackupAt = new Date().toISOString(); await saveState(); render(); toast("已匯出備份"); }
 }
 
 /* ============ 共用密碼 ============ */
