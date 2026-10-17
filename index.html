@@ -114,6 +114,8 @@ button{cursor:pointer}
 .days{display:grid;justify-items:center;border-radius:var(--r-sm);padding:6px 4px;line-height:1.1}
 .days b{font-size:22px;font-weight:700}
 .days small{font-size:13px;margin-top:2px}
+.days b .ap{font-size:13px;font-weight:500;margin-right:2px}
+.days small.long{font-size:12px;white-space:nowrap;letter-spacing:-.2px}
 .u-expired{background:var(--danger-bg);color:var(--danger)}
 .u-soon{background:var(--warn-bg);color:var(--warn)}
 .u-week{background:var(--info-bg);color:var(--week,var(--accent))}
@@ -300,7 +302,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <script>
 "use strict";
 /* ============ 常數與預設 ============ */
-const APP_VERSION = "1.6.1";
+const APP_VERSION = "1.6.2";
 const LOCS = ["冷藏","冷凍","常溫"];
 const ITEM_GROUPS = [
   ["生鮮食材", ["葉菜類","根莖瓜果","水果","肉類","海鮮","蛋","豆製品","乳製品","熟食剩菜","麵包烘焙"]],
@@ -464,6 +466,9 @@ function daysLabel(it) {
   const years = Math.max(1, Math.round(a / 365.25 * 2) / 2); // 取到半年
   return { big: String(years), small: past ? "年前到期" : "年後", approx: true };
 }
+// 備份提醒週期（月）：0＝不提醒；未設定時預設 1 個月
+function backupRemindMonths() { const m = state.settings.backupRemindMonths; return m == null ? 1 : m; }
+function monthsLater(iso, m) { const d = new Date(iso); const day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + m); d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())); return d.getTime(); }
 function monthlyCost(it) {
   if (it.kind !== "sub" || !it.amount) return 0;
   if (it.cycle === "年繳") return it.amount / 12; if (it.cycle === "月繳") return it.amount; return 0;
@@ -586,13 +591,16 @@ function renderOverview(v, active) {
   if (!state.items.length) { v.append(emptyState()); return; }
   const lb = state.settings.lastBackupAt;
   const lbDays = lb ? Math.floor((Date.now() - new Date(lb).getTime()) / 86400000) : null;
+  const rm = backupRemindMonths();
   const snoozed = state.settings.backupSnoozeUntil && Date.now() < new Date(state.settings.backupSnoozeUntil).getTime();
-  if (active.length >= 5 && (lbDays == null || lbDays > 30) && !snoozed) {
+  const due = lb ? Date.now() >= monthsLater(lb, rm) : true;
+  if (rm > 0 && active.length >= 5 && due && !snoozed) {
     v.append(h("div", { class: "banner", style: "margin-bottom:14px" }, h("b", null, lbDays == null ? "尚未備份過。" : `距上次備份已 ${lbDays} 天。`),
       `目前有 ${active.length} 筆追蹤中的資料，只存在這支手機。建議匯出備份存到「檔案」或雲端硬碟，換手機或資料遺失時才能還原。`,
       h("div", { class: "btn-row", style: "margin-top:8px" },
         h("button", { class: "btn sm", onclick: exportBackup }, "立即備份"),
-        h("button", { class: "btn ghost sm", onclick: async () => { state.settings.backupSnoozeUntil = new Date(Date.now() + 7 * 86400000).toISOString(); await saveState(); render(); toast("已關閉，7 天後再提醒"); } }, "7 天後再提醒"))));
+        h("button", { class: "btn ghost sm", onclick: async () => { state.settings.backupSnoozeUntil = new Date(monthsLater(new Date().toISOString(), rm)).toISOString(); await saveState(); render(); toast(`已關閉，${rm} 個月後再提醒`); } }, `${rm} 個月後再提醒`),
+        h("button", { class: "btn ghost sm", onclick: async () => { state.settings.backupRemindMonths = 0; await saveState(); render(); toast("已關閉備份提醒，可在「設定 → 資料備份」重新開啟"); } }, "不再提醒"))));
   }
 
   // 依存放位置篩選後，列出目前有項目的類別（含筆數）
@@ -658,7 +666,7 @@ function rowEl(it) {
     meta.push(h("span", { text: it.autoRenew ? "自動續訂" : "手動續訂" }));
   }
   return h("button", { class: "row", onclick: () => openEditSheet(it.id) },
-    h("span", { class: "days u-" + u, title: it.expiry ? `距離到期 ${diffDays(today(), it.expiry)} 天` : "" }, h("b", { class: "num", text: dl.big }), h("small", { text: (dl.approx ? "約 " : "") + dl.small })),
+    h("span", { class: "days u-" + u, title: it.expiry ? `距離到期 ${diffDays(today(), it.expiry)} 天` : "" }, h("b", { class: "num" }, dl.approx ? h("span", { class: "ap", text: "約" }) : null, dl.big), h("small", { class: dl.small.length >= 5 ? "long" : null, text: dl.small })),
     h("span", { class: "main" }, h("div", { class: "name", text: it.name }), h("div", { class: "meta" }, meta)),
     h("span", { class: "date num" }, it.expiry ? shortDate(it.expiry) : "—", h("span", { class: "src", text: it.dateSource || "" })));
 }
@@ -1561,7 +1569,7 @@ function renderSettings(v) {
       const map = new Map(state.items.map(i => [i.id, i]));
       let n = 0; for (const it of data.items) { if (it && it.id && it.name) { map.set(it.id, it); n++; } }
       state.items = [...map.values()];
-      if (data.settings) { const k = state.settings.ai, lb = state.settings.lastBackupAt, sz = state.settings.backupSnoozeUntil; state.settings = mergeSettings(data.settings); state.settings.ai = k; state.settings.lastBackupAt = lb; state.settings.backupSnoozeUntil = sz; applyPalette(state.settings.palette); }
+      if (data.settings) { const k = state.settings.ai, lb = state.settings.lastBackupAt, sz = state.settings.backupSnoozeUntil, brm = state.settings.backupRemindMonths; state.settings = mergeSettings(data.settings); state.settings.ai = k; state.settings.lastBackupAt = lb; state.settings.backupSnoozeUntil = sz; state.settings.backupRemindMonths = brm; applyPalette(state.settings.palette); }
       ui.keyHint = !state.settings.ai.key; // 備份不含金鑰：提醒重新貼上
       await saveState(); render();
       if (ui.keyHint) { toast(`已匯入 ${n} 筆資料。備份不含 Gemini 金鑰，請重新貼上`, 5000); const k = document.getElementById("set-key"); if (k) k.closest(".card").scrollIntoView({ behavior: "smooth", block: "center" }); }
@@ -1570,6 +1578,13 @@ function renderSettings(v) {
   });
   v.append(h("div", { class: "card" },
     h("div", { class: "note" }, "資料只存在這支手機。建議每月匯出一次備份存到「檔案」或雲端硬碟；換手機時用「匯入備份」還原。"),
+    (() => {
+      const opts = [["1", "每 1 個月"], ["2", "每 2 個月"], ["3", "每 3 個月"], ["6", "每 6 個月"], ["12", "每 12 個月"], ["0", "不提醒"]];
+      const sel = h("select", { id: "set-brm" }, opts.map(([v, t]) => h("option", { value: v, text: t })));
+      sel.value = String(backupRemindMonths());
+      sel.addEventListener("change", async () => { s.backupRemindMonths = parseInt(sel.value, 10); s.backupSnoozeUntil = ""; await saveState(); toast(s.backupRemindMonths ? `備份提醒已設為每 ${s.backupRemindMonths} 個月` : "已關閉備份提醒"); });
+      return h("div", { class: "form", style: "margin-top:10px" }, field("備份提醒", sel, { full: true, help: h("div", { class: "help", text: "追蹤中的項目達 5 筆以上，且超過所選期間未備份時，總覽會出現提醒。" }) }));
+    })(),
     h("div", { class: "num", style: "margin-top:6px;font-size:14.5px;color:var(--ink-2)", text: s.lastBackupAt ? `上次備份：${(d => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`)(new Date(s.lastBackupAt))}` : "尚未備份過" }),
     h("div", { class: "btn-row" },
       h("button", { class: "btn ghost", onclick: exportBackup }, "匯出備份"),
@@ -1647,7 +1662,7 @@ function buildICS(items, hour = state.settings.alarmHour) {
 }
 function exportICS(items, name) { deliverFile(name, buildICS(items), "text/calendar"); }
 async function exportBackup() {
-  const { lastBackupAt, backupSnoozeUntil, ...rest } = state.settings;
+  const { lastBackupAt, backupSnoozeUntil, backupRemindMonths: _rm, ...rest } = state.settings;
   const data = { app: "expiry-keeper", version: 1, exportedAt: new Date().toISOString(), items: state.items, settings: { ...rest, ai: { key: "", model: state.settings.ai.model } } };
   const done = await deliverFile(`效期管家備份-${today()}.json`, JSON.stringify(data, null, 2), "application/json");
   if (done) { state.settings.lastBackupAt = new Date().toISOString(); await saveState(); render(); toast("已匯出備份"); }
